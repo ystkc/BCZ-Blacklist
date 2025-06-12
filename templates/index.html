@@ -1,0 +1,1782 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css -->
+    <link
+      rel="stylesheet"
+      href="/static/css/font-awesome.min.css"
+      integrity="sha512-SfTiTlX6kk+qitfevl/7LibUOeJWlt9rbyDn92a1DqWOw9vWG2MFoays0sgObmWazO5BQPiFucnnEAjpAB+/Sw=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
+    <!-- https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/css/bootstrap.min.css -->
+    <link
+      href="static/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-4Q6Gf2aSP4eDXB8Miphtr37CMZZQ5oXLH2yaXMJ2w8e2ZtHTl7GptT4jmndRuHDT"
+      crossorigin="anonymous"
+    />
+    <!-- https://cdn.jsdelivr.net/npm/sweetalert2@11 -->
+    <script src="static/js/sweetalert2@11.js"></script>
+
+    <title>黑名单添加&查询</title>
+    <link rel="stylesheet" href="/static/css/span-color.css" />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: Consolas, "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      }
+
+      .form-group {
+        display: flex;
+        text-wrap: nowrap;
+        align-items: center;
+      }
+
+      .avatar {
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        margin-bottom: 10px;
+      }
+      td,
+      tr {
+        text-wrap: nowrap;
+        max-height: 100px;
+      }
+      .wrap {
+        text-wrap: wrap;
+      }
+
+      body.night {
+        background: linear-gradient(135deg, #2c3e50, #4a6491);
+        color: #fff;
+      }
+      body.day {
+        background: linear-gradient(135deg, #eae9d9, #b0d1d2);
+      }
+      body {
+        min-height: 100vh;
+        width: 2000px;
+        padding: 10px;
+      }
+
+      /* 顶部区域 - 8%高度 */
+      .top-section {
+        height: 8vh;
+        min-height: 150px;
+        background: linear-gradient(to right, #3498db, #2c3e50);
+        margin-bottom: 20px;
+        border-radius: 12px;
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        padding: 20px;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .top-section::before {
+        content: "";
+        position: absolute;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: radial-gradient(
+          circle,
+          rgba(255, 255, 255, 0.2) 0%,
+          transparent 60%
+        );
+        transform: rotate(30deg);
+      }
+
+      .top-section h1 {
+        font-size: 2.5rem;
+        margin-bottom: 10px;
+        position: relative;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+      }
+
+      .top-section p {
+        font-size: 1.1rem;
+        max-width: 80%;
+        position: relative;
+      }
+
+      /* 主体区域 */
+      .main-content {
+        display: flex;
+        margin: 15% 10%;
+        gap: 3%;
+      }
+
+      .column,
+      .result-column {
+        display: flex;
+        flex-direction: column;
+        align-self: flex-start;
+        gap: 20px;
+      }
+      .result-column {
+        width: fit-content;
+      }
+
+      /* 左侧正方形框 */
+      .square-box {
+        position: relative;
+        border-radius: 12px;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        width: 100%;
+        min-width: 250px;
+      }
+      .square-box.day {
+        background: rgba(255, 255, 255, 0.15);
+      }
+      .square-box.night {
+        background: rgba(255, 255, 255, 0.05);
+      }
+
+      .square-box::before {
+        content: "";
+        display: block;
+        padding-top: 100%; /* 关键 - 保持宽高比1:1 */
+      }
+
+      .square-content {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        padding: 15px;
+        text-align: center;
+      }
+
+      .square-content i {
+        font-size: 1rem;
+        margin-bottom: 15px;
+        color: rgba(255, 255, 255, 0.9);
+      }
+
+      /* 右侧自适应内容框 */
+      .content-box {
+        transition: all 0.3s;
+        flex: 1;
+        border-radius: 12px;
+        padding: 25px;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+      }
+      .content-box.day {
+        background: rgba(255, 255, 255, 0.15);
+      }
+      .content-box.night {
+        background: rgba(255, 255, 255, 0.05);
+      }
+
+      .content-box h2 {
+        font-size: 1.8rem;
+        margin-bottom: 20px;
+        color: #3498db;
+        border-bottom: 2px solid rgba(52, 152, 219, 0.5);
+        padding-bottom: 10px;
+      }
+
+      .content-box p {
+        line-height: 1.8;
+        margin-bottom: 15px;
+      }
+
+      /* 响应式设计 */
+      @media (max-width: 800px) {
+        .main-content {
+          margin: 10% 5%;
+        }
+        .top-section::before {
+          transform: rotate(45deg);
+        }
+      }
+
+      @media (max-width: 600px) {
+        .main-content {
+          flex-direction: column;
+          margin: 10% 0;
+        }
+
+        .column {
+          flex-direction: row;
+        }
+
+        .square-box {
+          flex: none;
+          width: 100%;
+          max-width: 150px;
+          margin: 0 auto 20px;
+        }
+
+        .top-section h1 {
+          font-size: 1.8rem;
+        }
+      }
+
+      .btn-row {
+        display: flex;
+        justify-content: flex-start;
+        height: 40px;
+        gap: 5px;
+      }
+      .btn {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        overflow: hidden;
+        position: relative;
+        cursor: pointer;
+        box-shadow: inset -0.2rem -0.2rem 0.1rem 0 rgba(0, 0, 0, 0.2);
+        user-select: none;
+        transition: all 0.2s ease;
+      }
+      .btn:focus,
+      input:focus {
+        box-shadow: none !important;
+      }
+      .btn:hover {
+        /* transform: scale(1.02); */
+        background: rgba(255, 255, 255, 0.2);
+      }
+      .btn:active {
+        /* transform: scale(0.98); */
+        background: transparent;
+        padding: 0.5rem 0.3rem 0.3rem 0.5rem;
+        box-shadow: inset 0.2rem 0.2rem 0.1rem 0 rgba(0, 0, 0, 0.2);
+      }
+      .btn.disabled {
+        opacity: 0.6;
+        transform: none !important;
+        cursor: not-allowed;
+      }
+
+      .btn .mask {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+      }
+
+      .btn .mask:hover {
+        position: absolute;
+        top: 0;
+        left: -140%;
+        width: 240%;
+        background: linear-gradient(
+          90deg,
+          transparent 50%,
+          rgba(255, 255, 255, 0.1) 55%,
+          transparent 60%
+        );
+        animation: loading 0.5s linear;
+      }
+
+      @keyframes loading {
+        100% {
+          left: 0%;
+        }
+      }
+      @keyframes show {
+        0% {
+          opacity: 0;
+        }
+        80% {
+          opacity: 1;
+        }
+      }
+      @keyframes hide {
+        0% {
+          opacity: 1;
+        }
+        80% {
+          opacity: 0;
+        }
+      }
+
+      .btn h3 {
+        color: #2ecc71;
+        margin-bottom: 10px;
+      }
+
+      /* 页脚 */
+      footer {
+        text-align: center;
+        padding: 30px 0 20px;
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 0.9rem;
+      }
+      input:disabled {
+        background: transparent;
+        border: none;
+      }
+      input {
+        width: 100%;
+        margin: 8px 0;
+        box-sizing: border-box;
+        border: 2px solid #ccc;
+        border-radius: 4px;
+        background-color: #f8f8f8;
+        font-size: 16px;
+      }
+      .page-utils {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100px;
+      }
+    </style>
+  </head>
+  <body>
+    <div>
+      <!-- 主体内容区域 -->
+      <div class="main-content">
+        <div class="column">
+          <div class="square-box">
+            <div class="square-content" id="user-info"></div>
+          </div>
+
+          <div class="square-box">
+            <div class="square-content">
+              <input
+                type="text"
+                id="key"
+                placeholder="搜索黑名单..."
+                onblur="search()"
+              />
+
+              <div class="btn-row">
+                <div class="btn" onclick="search()">
+                  <div class="mask"></div>
+                  搜索
+                </div>
+                <div class="btn" onclick="showEditBox(null)">
+                  <div class="mask"></div>
+                  添加
+                </div>
+              </div>
+              <div class="btn-row">
+                <div
+                  class="btn"
+                  onclick="document.querySelector('#key').value = 'add_by_me';search()"
+                >
+                  <div class="mask"></div>
+                  查看我添加的
+                </div>
+                <div class="btn" onclick="toggleDarkMode()">
+                  <div class="mask"></div>
+                  <i class="fa fa-sun-o"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="result-column">
+          <div class="content-box" id="edit-box" style="display: none">
+            <h2>编辑详情</h2>
+            <div class="form-group">
+              对方的bczId: <input type="number" id="uid" disabled />
+            </div>
+            <div class="form-group">
+              创建时间: <input type="text" id="create_time" readonly disabled />
+            </div>
+            <div class="form-group">
+              对方昵称: <input type="text" id="user-nickname" />
+            </div>
+            <div class="form-group">
+              退班时间:
+              <div id="date" onclick="updateDatePicker(this)"></div>
+            </div>
+            <div class="form-group">
+              原因:
+              <div
+                id="reason-selector"
+                onclick="updateReasonSelector(this)"
+              ></div>
+            </div>
+            <div class="form-group">
+              记录人: <input type="text" id="operator" />
+            </div>
+            <div class="form-group">
+              记录人QQ: <input type="number" id="operator_qq_id" />
+            </div>
+            <div class="form-group">
+              备注: <input type="text" id="remark" />
+            </div>
+            <div class="form-group">
+              最后编辑时间:
+              <input type="text" id="last_edit_time" readonly disabled />
+            </div>
+            <div class="form-group">
+              表名:
+              <div id="table-selector" onclick="updateTableSelector(this)">
+                点击选择要添加的黑名单
+              </div>
+            </div>
+            <div class="btn-row">
+              <div class="btn" onclick="submitEditBox()">
+                <div class="mask"></div>
+                提交
+              </div>
+              <div class="btn" onclick="hideEditBox()">
+                <div class="mask"></div>
+                取消
+              </div>
+            </div>
+          </div>
+          <div class="content-box" id="result">
+            <div id="result-title"></div>
+            <div class="btn-row" id="page-utils"></div>
+            <table
+              id="result-list"
+              style="
+                --bs-table-bg: transparent;
+                --bs-table-hover-bg: rgba(0, 0, 0, 0.1);
+              "
+              class="table table-hover"
+            ></table>
+          </div>
+        </div>
+      </div>
+
+      <footer>
+        <p>Cereanilla &copy; 2025 BCZ-Blacklist</p>
+      </footer>
+    </div>
+    <script src="static/js/script.js"></script>
+    <script>
+      function passwordForm(register = false) {
+        let placeholder1 = "留空则不修改密码";
+        let placeholder2 = "留空则不修改密码";
+        if (register) {
+          placeholder1 = "请输入密码(至少8位)";
+          placeholder2 = "请再次输入密码";
+        }
+        return `
+      <div class="form-group">
+        <label for="password">新密码</label>
+        <input type="password" class="form-control" id="password" placeholder="${placeholder1}" onblur="checkPassword()">
+      </div><span id="password-error"></span>
+      <div class="form-group">
+        <label for="confirm_password">确认密码</label>
+        <input type="password" class="form-control" id="confirm_password" placeholder="${placeholder2}" onblur="checkConfirmPassword()">
+      </div><span id="connfirm-password-error"></span>
+      `;
+      }
+      function checkPassword() {
+        // 至少8位，含有数字和字母
+        const password = document.querySelector("#password").value;
+        if (password === "" && currentOperation === 3) return;
+        const passwordError = document.querySelector("#password-error");
+        if (
+          password.length < 8 ||
+          !/\d/.test(password) ||
+          !/[^a-zA-Z]+$/.test(password)
+        ) {
+          passwordError.textContent = "密码至少8位，含有数字和字母";
+          passwordError.style.color = "red";
+        } else {
+          passwordError.textContent = "✓";
+          passwordError.style.color = "green";
+        }
+      }
+      function checkConfirmPassword() {
+        // 两次密码是否一致
+        const password = document.querySelector("#password").value;
+        const confirmPassword =
+          document.querySelector("#confirm_password").value;
+        const confirmPasswordError = document.querySelector(
+          "#connfirm-password-error"
+        );
+        if (confirmPassword !== password) {
+          confirmPasswordError.textContent = "两次密码不一致";
+          confirmPasswordError.style.color = "red";
+        } else {
+          confirmPasswordError.textContent = "✓";
+          confirmPasswordError.style.color = "green";
+        }
+      }
+      function verifyForm() {
+        return `
+      <div class="form-group">
+        <label for="verify_code">验证码</label>
+        <input type="number" class="form-control" id="verify_code" placeholder="请输入验证码">
+        <div class="btn" style="background:lightgrey" onclick="sendVerifyCode()">发送验证码</div>
+      </div><span id="verify-code-error"></span>`;
+      }
+      function userInfoForm(
+        email_readonly_tag,
+        type_readonly_tag,
+        qq_id = "",
+        type = "",
+        type_name = "",
+        unique_id = "",
+        nickname = ""
+      ) {
+        let typePlaceholder = "请输入邮箱后自动检测";
+        if (type_readonly_tag == "") {
+          // 管理员。普通成员是readonly disabled
+          typePlaceholder = "管理员可以修改其他用户类型";
+        }
+        return `
+      <div class="form-group">
+        <label for="qq_id">邮箱</label>
+        <input type="number" class="form-control" id="qq_id" placeholder="请输入邮箱" onblur="checkEmailType()" ${email_readonly_tag} value="${qq_id}">@qq.com
+      </div>
+      <div class="form-group">
+        <label for="type">类型</label>
+        <input type="number" class="form-control" id="type" placeholder="${typePlaceholder}" ${type_readonly_tag} value="${type}">
+      </div>
+      <span id="type-name">${type_name}</span>
+      <div class="form-group">
+        <label for="unique-id">bczId</label>
+        <input type="number" class="form-control" id="unique-id" placeholder="请输入bczId" value="${unique_id}">
+      </div>
+      <div class="form-group">
+        <label for="nickname">昵称</label>
+        <input type="text" class="form-control" id="nickname" placeholder="请输入昵称" value="${nickname}">
+      </div>`;
+      }
+      function registerForm() {
+        return (
+          userInfoForm("", "disabled") +
+          passwordForm(true) +
+          verifyForm() +
+          resultForm()
+        );
+      }
+      function loginForm() {
+        return (
+          `
+      <div class="form-group">
+        <label for="qq_id">邮箱</label>
+        <input type="number" class="form-control" id="qq_id" placeholder="请输入邮箱">@qq.com
+      </div>
+      <div class="form-group">
+        <label for="password">密码</label>
+        <input type="password" class="form-control" id="password" placeholder="请输入密码">
+      </div>
+      <div class="form-group form-check">
+        <input type="checkbox" class="form-check-input" id="remember-me">
+        <label for="remember-me">下次自动登录</label>
+      </div>
+      <div class="btn-row">
+        <div class="btn" onclick="register()">注册账号</div>
+        <div class="btn" onclick="resetPassword()">忘记密码</div>
+      </div>` + resultForm()
+        );
+      }
+      function resetPasswordForm() {
+        return (
+          `
+      <div class="form-group">
+        <label for="qq_id">邮箱</label>
+        <input type="number" class="form-control" id="qq_id" placeholder="请输入邮箱">@qq.com
+      </div>` +
+          passwordForm(true) +
+          verifyForm() +
+          resultForm()
+        );
+      }
+
+      function resultForm() {
+        return `<br><span id="form-result"></span>`;
+      }
+
+      function checkEmailType() {
+        const qq_id = document.querySelector("#qq_id");
+        if (qq_id.value === "") {
+          return;
+        }
+        const target_name = document.querySelector("#type-name");
+        const target = document.querySelector("#type");
+        target.value = "";
+        target_name.textContent = "获取中...";
+        if (currentOperation === 1) {
+          fetch(
+            "/bapi/check_email_type?recv_email=" + qq_id.value + "@qq.com",
+            {
+              method: "GET",
+            }
+          )
+            .then((response) => response.json())
+            .then((data) => {
+              console.log(data);
+              let warning = "";
+              if (data.data.has_password)
+                warning = "<span style='color:red'>该邮箱已注册</span>";
+              if (data.code == 200) {
+                target.value = data.data.type;
+                target_name.innerHTML = `${data.data.type}(${data.data.type_name})${warning}`;
+              } else {
+                target.value = "";
+                target_name.textContent = "获取失败:" + data.msg;
+              }
+            })
+            .catch((error) => {
+              console.error(error);
+            });
+        } else {
+          // 管理员正在修改其他用户，获取信息并填入表格
+          // POST /bapi/user_info (qq_id) -> data.data={'unique_id':, 'permission':, 'nickname':}
+          fetch("/bapi/user_info", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              qq_id: qq_id.value,
+            }),
+          })
+            .then((response) => response.json())
+            .then((data) => {
+              console.log(data);
+              if (data.code == 200) {
+                target.value = data.data.permission.type;
+                target_name.textContent = `当前用户：${data.data.permission.type}(${data.data.permission.type_name})`;
+                document.querySelector("#unique-id").value =
+                  data.data.unique_id;
+                document.querySelector("#nickname").value = data.data.nickname;
+              } else {
+                target.value = "";
+                target_name.textContent = "获取失败:" + data.msg;
+                document.querySelector("#unique-id").value = "";
+                document.querySelector("#nickname").value = "";
+              }
+            })
+            .catch((error) => {
+              console.error(error);
+            });
+        }
+      }
+      const logHeader = [
+        "操作",
+        "uid",
+        "创建时间",
+        "昵称",
+        "退班时间",
+        "原因",
+        "记录人",
+        "邮箱",
+        "备注",
+        "最后编辑时间",
+        "表名",
+      ];
+      const resultHeader = [
+        "uid",
+        "创建时间",
+        "昵称",
+        "退班时间",
+        "原因",
+        "记录人",
+        "邮箱",
+        "备注",
+        "最后编辑时间",
+        "表名",
+        "操作",
+      ];
+      const dateDict = {
+        999: "自定义",
+        0: "现在",
+        1: "一天前",
+        2: "两天前",
+        3: "三天前",
+        4: "四天前",
+        5: "五天前",
+        6: "六天前",
+        7: "一周前",
+      };
+      const currentUser = {};
+      let currentKey = "";
+      let page_max = 1;
+      let reasons = {};
+      let tables = {};
+      let operations = {};
+      let darkMode = null;
+      let currentOperation = 0;
+      function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(";").shift();
+      }
+      function setCookie(name, value, days) {
+        const date = new Date();
+        date.setTime(date.getTime() + days * 24 * 60 * 60 * 1000);
+        document.cookie = `${name}=${value};expires=${date.toGMTString()}`;
+      }
+      function toggleDarkMode() {
+        if (darkMode === null) {
+          // 从cookie中读取（由于后面会被反转，所以先取反）
+          const darkCookie = getCookie("darkMode");
+          if (darkCookie === "true") {
+            darkMode = false;
+          } else if (darkCookie === "false") {
+            darkMode = true;
+          } else {
+            darkMode = !(
+              window.matchMedia &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches
+            );
+          }
+        }
+        if (darkMode) {
+          setCookie("darkMode", "false", 365);
+          document.documentElement.classList.remove("night");
+          document.documentElement.classList.add("day");
+          document.querySelector("#result-list").classList.remove("table-dark");
+          document.body.classList = "day";
+          darkMode = false;
+        } else {
+          setCookie("darkMode", "true", 365);
+          document.documentElement.classList.add("night");
+          document.documentElement.classList.remove("day");
+          document.querySelector("#result-list").classList.add("table-dark");
+          document.body.classList = "night";
+          darkMode = true;
+        }
+      }
+      async function updateReasonSelector(element, value = null) {
+        if (value === null)
+          value = (
+            await showSelector(
+              reasons,
+              getReasonColorClass,
+              element.dataset.selectedIds,
+              true
+            )
+          ).value;
+        if (value !== undefined) {
+          // 如果用户点击了取消或窗口外，则value为undefined
+          if (value.length === 0) {
+            // 注意只有多选可能有空列表
+            element.dataset.selectedIds = "";
+            element.innerHTML = "<span class='wheat'>点击选择原因</span>";
+          } else {
+            element.dataset.selectedIds = value;
+            element.innerHTML =
+              interpretReason(value) +
+              "<span class='wheat'>点击修改原因</span>";
+          }
+        }
+      }
+      async function updateTableSelector(element, value = null) {
+        if (value === null)
+          value = (
+            await showSelector(
+              tables,
+              getTableClass,
+              element.dataset.selectedIds,
+              false
+            )
+          ).value;
+        if (value !== undefined) {
+          element.dataset.selectedIds = value[0];
+          element.innerHTML =
+            tables[parseInt(value[0])] +
+            "<span class='wheat'>点击修改要添加的黑名单</span>";
+        }
+      }
+      async function updateDatePicker(element, value = null) {
+        if (value === null)
+          value = (
+            await showSelector(
+              dateDict,
+              getReasonColorClass,
+              element.dataset.selectedIds,
+              false
+            )
+          ).value;
+        if (value !== undefined) {
+          if (value[0] === 999) {
+            // 自定义日期
+            element.dataset.selectedIds = 999; // 自定义日期
+            value = (
+              await customDatePicker(parseInt(element.dataset.timestamp))
+            ).value; // 此处返回的是ms时间戳
+          } else {
+            element.dataset.selectedIds = value[0]; // 选择了value[0]天前
+            value = new Date().getTime() - value[0] * 86400000; // 计算ms时间戳
+          }
+          element.dataset.timestamp = value;
+          element.innerHTML =
+            new Date(value).toLocaleString() +
+            "<span class='wheat'>点击修改日期</span>";
+        }
+      }
+      async function customDatePicker(initialTimestamp) {
+        const initialDate = new Date(initialTimestamp);
+        return await Swal.fire({
+          title: "请选择",
+          html: `<input type="date" id="swal-date" class="swal2-input" placeholder="日期" value=${initialDate
+            .toISOString()
+            .slice(0, 10)}>
+            <input type="time" id="swal-time" class="swal2-input" placeholder="时间" value=${initialDate
+              .toISOString()
+              .slice(11, 19)}>`,
+          focusConfirm: false,
+          showCancelButton: true,
+          allowEnterKey: true,
+          preConfirm: () => {
+            const date = document.getElementById("swal-date").value;
+            const time = document.getElementById("swal-time").value;
+            if (!date || !time) {
+              Swal.showValidationMessage("请填写日期和时间！");
+            }
+            // 返回ms时间戳
+            return new Date(date + "T" + time).getTime();
+          },
+        });
+      }
+      async function showSelector(
+        map,
+        styleFunction,
+        selectedIds = "",
+        multiple = false
+      ) {
+        // 创建多选原因列表的Swal弹窗，返回值[单选或多选id列表] | [全不选] | undefined取消或窗口外
+        // styleFuntion返回到span的class样式，如果以disabled开头则不可选
+
+        if (selectedIds === "") {
+          // 将selectedIds转为数组
+          selectedIds = [];
+        } else {
+          selectedIds = selectedIds.split(",").map((id) => parseInt(id));
+        }
+        let weekDay = new Date().getDay();
+        let htmlContent = `<div class="reason-list"><span>今天是星期${weekDay}</span><br>`;
+        let command = "";
+        if (multiple) {
+          command = "this.classList.toggle('active')";
+        } else {
+          // 单选
+          command = `if(!this.classList.contains('active')){document.querySelector('#r-${selectedIds[0]}').classList.remove('active');this.classList.add('active');}Swal.clickConfirm()`;
+        }
+
+        for (const [id, name] of Object.entries(map)) {
+          const spanClass = styleFunction(parseInt(id));
+          const isChecked = selectedIds.includes(parseInt(id))
+            ? "active"
+            : spanClass.startsWith("disabled")
+            ? "disabled"
+            : "";
+          // 如果已经写入，即便权限被移除也能修改，但是不能新增
+          htmlContent += `
+            <div class="btn r-checkbox ${isChecked}" id="r-${id}" data-id="${id}" onclick="${command}">
+              <span class="${spanClass}">
+                ${name}
+              </span>
+            </div>
+          `;
+        }
+
+        htmlContent += "</div>";
+        let selectType = "(单选)";
+        if (multiple) {
+          selectType = "(多选)";
+        }
+        // 使用SweetAlert2显示弹窗
+        result = await Swal.fire({
+          title: "请选择" + selectType,
+          html: htmlContent,
+          showCancelButton: true,
+          confirmButtonText: "确认",
+          cancelButtonText: "取消",
+          focusConfirm: false,
+          allowOutsideClick: true,
+          customClass: {
+            popup: "sweet-popup",
+            confirmButton: "btn-confirm",
+            cancelButton: "btn-cancel",
+          },
+          preConfirm: () => {
+            const checkboxes = document.querySelectorAll(".r-checkbox.active");
+            return Array.from(checkboxes).map((checkbox) =>
+              parseInt(checkbox.dataset.id)
+            );
+          },
+        });
+        return result;
+      }
+      function scrollToTop() {
+        window.scrollTo(400, 300);
+      }
+      function showEditBox(log) {
+        const uid = document.querySelector("#uid");
+        if (log === null) {
+          const currentTimestamp = parseInt(new Date().getTime() / 1000);
+          log = [
+            null,
+            currentTimestamp,
+            "",
+            currentTimestamp,
+            "",
+            currentUser.nickname,
+            currentUser.qq_id,
+            "",
+            currentTimestamp,
+            1,
+          ];
+          uid.disabled = false;
+        } else {
+          uid.disabled = true;
+        }
+        for (let i = 0; i < log.length; i++) if (log[i] === "null") log[i] = ""; // 在插入btn时的小漏洞
+        const editBox = document.querySelector("#edit-box");
+        editBox.style.display = "block";
+        editBox.style.animation = "show .3s";
+        uid.value = log[0];
+        const create_time = document.querySelector("#create_time");
+        const createTimestamp = log[1] * 1000;
+        create_time.dataset.timestamp = createTimestamp; // 注意dataset中是字符串
+        create_time.value = new Date(createTimestamp).toLocaleString();
+        document.querySelector("#user-nickname").value = log[2];
+        const date = document.querySelector("#date");
+        const dateTimestamp = log[3] * 1000;
+        date.dataset.selectedIds = 999;
+        date.dataset.timestamp = dateTimestamp;
+        date.innerHTML =
+          new Date(dateTimestamp).toLocaleString() +
+          "<span class='wheat'>点击修改日期</span>";
+        let reason_id_list = [];
+        if (log[4]) {
+          reason_id_list = log[4].split(",");
+        }
+        updateReasonSelector(
+          document.querySelector("#reason-selector"),
+          reason_id_list // 此处必须传入数组
+        );
+        document.querySelector("#operator").value = log[5];
+        document.querySelector("#operator_qq_id").value = log[6];
+        if (currentUser.permission.modify_other_users) {
+          document.querySelector("#operator").disabled = false;
+          document.querySelector("#operator_qq_id").disabled = false;
+        } else {
+          document.querySelector("#operator").disabled = true;
+          document.querySelector("#operator_qq_id").disabled = true;
+        }
+        document.querySelector("#remark").value = log[7];
+        if (log[8] === "")
+          // 此处只需要显示，无需提交，服务器会自动补充
+          document.querySelector("#last_edit_time").value =
+            new Date().toLocaleString();
+        else
+          document.querySelector("#last_edit_time").value = new Date(
+            log[8] * 1000
+          ).toLocaleString();
+        updateTableSelector(document.querySelector("#table-selector"), [
+          log[9],
+        ]);
+        scrollToTop();
+      }
+      function submitEditBox() {
+        // 为了方便连续添加（失败后重新提交），提交后不隐藏
+        // POST /bapi/update {uid:int, date:timestamp, reasons:str, recorder:str, recorder_qq_id:int, remark:str, table_id:int
+        const uid = parseInt(document.querySelector("#uid").value);
+        const create_time = parseInt(
+          parseInt(document.querySelector("#create_time").dataset.timestamp) /
+            1000
+        ); // 转换为秒时间戳
+        const nickname = document.querySelector("#user-nickname").value;
+        const date = parseInt(
+          parseInt(document.querySelector("#date").dataset.timestamp) / 1000
+        );
+        const reasons_str =
+          document.querySelector("#reason-selector").dataset.selectedIds;
+        const recorder = document.querySelector("#operator").value;
+        const recorder_qq_id = document.querySelector("#operator_qq_id").value;
+        const remark = document.querySelector("#remark").value;
+        const table_id = parseInt(
+          document.querySelector("#table-selector").dataset.selectedIds
+        );
+        fetch("/bapi/update", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            uid: uid,
+            create_time: create_time,
+            nickname: nickname,
+            date: date,
+            reasons_str: reasons_str,
+            recorder: recorder,
+            recorder_qq_id: recorder_qq_id,
+            remark: remark,
+            table_id: table_id,
+          }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            console.log(data);
+            if (data.code == 200) {
+              Swal.fire({
+                title: "添加成功",
+                text: data.msg,
+                icon: "success",
+              });
+              search();
+            } else {
+              Swal.fire({
+                title: "添加失败",
+                text: data.msg,
+                icon: "error",
+              });
+            }
+          })
+          .catch((error) => {
+            console.error(error);
+          });
+      }
+      function hideEditBox() {
+        const editBox = document.querySelector("#edit-box");
+        editBox.style.animation = "hide .3s";
+        setTimeout(() => {
+          editBox.style.display = "none";
+        }, 300);
+      }
+      function getTableClass(tableId) {
+        let darkPrefix = "";
+        if (darkMode) {
+          // 黑暗低饱和模式
+          darkPrefix += "dark-";
+        }
+        if (currentUser.permission.type < tableId) {
+          return `disabled ${darkPrefix}lightgrey`;
+        } else {
+          return `${darkPrefix}lightgrey`;
+        }
+      }
+      function getReasonColorClass(originalReasonId) {
+        let darkPrefix = "";
+        if (darkMode) {
+          // 黑暗低饱和模式
+          darkPrefix = "dark-";
+        }
+        const reasonId = (originalReasonId % 7) + 1;
+        if (reasonId === 1) {
+          return `${darkPrefix}pink`;
+        } else if (reasonId === 2) {
+          return `${darkPrefix}orange`;
+        } else if (reasonId === 3) {
+          return `${darkPrefix}yellow`;
+        } else if (reasonId === 4) {
+          return `${darkPrefix}aquamarine`;
+        } else if (reasonId === 5) {
+          return `${darkPrefix}skyblue`;
+        } else if (reasonId === 6) {
+          return `${darkPrefix}cyan`;
+        } else if (reasonId === 7) {
+          return `${darkPrefix}violet`;
+        }
+        return "";
+      }
+      function interpretReason(reason_ids_str) {
+        if (!reason_ids_str) return "";
+        // 如果是字符串，则split
+        if (typeof reason_ids_str === "string") {
+          reason_ids_str = reason_ids_str.split(",");
+        }
+        let reason_html = "",
+          reason_cnt = 0;
+        console.log(reason_ids_str);
+        reason_ids_str.forEach((rs) => {
+          r = parseInt(rs);
+          reason_cnt += 1;
+          reason_html += `<span class="${getReasonColorClass(r)}">${
+            reasons[r]
+          }</span>`;
+          if ((reason_cnt & 3) == 0) reason_html += "<br>";
+        });
+        return reason_html;
+      }
+      function interpretOperation(operationId) {
+        let darkPrefix = "<span class='";
+        if (darkMode) {
+          // 黑暗低饱和模式
+          darkPrefix += "dark-";
+        }
+        if (operationId === 1) {
+          return `${darkPrefix}aquamarine'>添加</span>`;
+        } else if (operationId === 2) {
+          return `${darkPrefix}pink'>删除</span>`;
+        } else if (operationId === 3) {
+          return `${darkPrefix}orange'>修改后</span>`;
+        } else if (operationId === 4) {
+          return `${darkPrefix}skyblue'>修改前</span>`;
+        } else if (operationId === 5) {
+          return `${darkPrefix}yellow'>已撤销</span>`;
+        } else if (operationId === 6) {
+          return `${darkPrefix}wheat'>注册</span>`;
+        }
+        return `${darkPrefix}lightgrey'>未知</span>`;
+      }
+      function getUserOperation(isSelf, isAdmin, log) {
+        let operation_html = "";
+        if (isSelf || isAdmin) {
+          operation_html = `<div class="btn" onclick="deleteBlacklist(${log[0]}, ${log[1]})"><i class="fa fa-trash"></i></div>
+          <div class="btn" onclick="showEditBox([${log[0]},${log[1]},'${log[2]}',${log[3]},'${log[4]}','${log[5]}',${log[6]},'${log[7]}',${log[8]},${log[9]}])"><i class="fa fa-edit"></i></div>`;
+        }
+        return operation_html;
+      }
+      async function getUserInfo() {
+        // GET /bapi/my_info -> {
+        //     "qq_id": int,
+        //     "unique_id": int,
+        //     "permission": {"type":int, "type_name":str, "modify_other_users": bool, "tables": {table_name: table_id}},
+        //     "nickname": str
+        // }
+        return fetch("/bapi/my_info")
+          .then((response) => response.json())
+          .then((data) => {
+            currentUser.avatar = data.avatar;
+            currentUser.qq_id = data.qq_id;
+            currentUser.unique_id = data.unique_id;
+            currentUser.permission = data.permission;
+            currentUser.nickname = data.nickname;
+            let email_html = "";
+            if (currentUser.qq_id) {
+              email_html = `<span>${currentUser.qq_id}@qq.com</span>`;
+            } else {
+              email_html = ``;
+            }
+            let login_html = "";
+            if (currentUser.permission.login_required) {
+              // 登入或注册
+              login_html = `<div class="btn" onclick="login()"><i class="fa fa-sign-in"></i>登录</div>
+              <div class="btn" onclick="register()"><i class="fa fa-user-plus"></i>注册</div>`;
+            } else {
+              // 修改资料或登出
+              login_html = `<div class="btn" onclick="changeUserInfo()"><div class="mask"></div>修改资料</div>
+              <div class="btn" onclick="logout()"><i class="fa fa-sign-out"></i>登出</div>`;
+            }
+            document.querySelector("#user-info").innerHTML = `
+                <img class="avatar" src="${currentUser.avatar}" alt="${currentUser.nickname}">
+                <h4 onclick="if(currentUser.login_required)login()">${currentUser.nickname}</h4>
+                ${email_html}
+                <span>bczId: ${currentUser.unique_id}</span>
+                <span>${currentUser.permission.type_name}</span>
+                <div class="btn-row">${login_html}</div>
+            `;
+            if (!currentUser.permission.has_admin) {
+              register(true);
+            }
+          })
+          .catch((error) => {
+            console.error(error);
+          });
+      }
+      function changeUserInfo() {
+        let readonly_tag = "";
+        currentOperation = 3;
+        if (!currentUser.permission.modify_other_users) {
+          // 不能修改其他用户信息
+          readonly_tag = "readonly disabled";
+        }
+        Swal.fire({
+          title: "修改个人信息",
+          html:
+            currentUser.permission.admin_notice +
+            userInfoForm(
+              readonly_tag,
+              readonly_tag,
+              currentUser.qq_id,
+              currentUser.permission.type,
+              currentUser.permission.type_name,
+              currentUser.unique_id,
+              currentUser.nickname
+            ) +
+            passwordForm(false) +
+            verifyForm() +
+            resultForm(),
+          focusConfirm: false,
+          showCancelButton: true,
+          confirmButtonText: "修改",
+          cancelButtonText: "取消",
+          allowOutsideClick: false,
+          customClass: {
+            popup: "sweet-popup",
+            confirmButton: "btn-confirm",
+            cancelButton: "btn-cancel",
+          },
+          preConfirm: () => {
+            submitUserInfo();
+            reject();
+          },
+        });
+      }
+      async function sendVerifyCode() {
+        // GET /bapi/send_verify_code recv_email:str -> {code:int, message:str}
+        document.querySelector("#verify-code-error").textContent = "发送中...";
+        const email = document.querySelector("#qq_id").value + "@qq.com";
+        fetch("/bapi/send_verify_code", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: email,
+            operation: currentOperation,
+          }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.code == 200) {
+              document.querySelector("#verify-code-error").textContent =
+                "成功：" + data.msg;
+              document.querySelector("#verify_code").focus();
+              let countDown = data.data;
+              const timer = setInterval(() => {
+                try {
+                  countDown--;
+                  if (countDown <= 0) {
+                    clearInterval(timer);
+                    document.querySelector("#verify_code").placeholder = "";
+                  } else {
+                    document.querySelector(
+                      "#verify_code"
+                    ).placeholder = `${countDown}秒后可重发`;
+                  }
+                } catch (e) {
+                  clearInterval(timer);
+                }
+              }, 1000);
+            } else {
+              document.querySelector("#verify-code-error").textContent =
+                "失败：" + data.msg;
+            }
+          })
+          .catch((error) => {
+            console.error(error);
+          });
+      }
+      function submitUserInfo() {
+        // POST /bapi/verify {email:str, code:int, user_type:int, nickname:str, password:str, confirm_password:str} -> {code:int, message:str}
+        const email = document.querySelector("#qq_id").value + "@qq.com";
+        const code = parseInt(document.querySelector("#verify_code").value);
+        const user_type = parseInt(document.querySelector("#type").value);
+        const unique_id = parseInt(document.querySelector("#unique-id").value);
+        const nickname = document.querySelector("#nickname").value;
+        const password = document.querySelector("#password").value;
+        const confirm_password =
+          document.querySelector("#confirm_password").value;
+        if (password !== confirm_password) {
+          Swal.showValidationMessage("失败：两次密码输入不一致");
+          return;
+        }
+        return fetch("/bapi/verify", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: email,
+            code: code,
+            unique_id: unique_id,
+            user_type: user_type,
+            nickname: nickname,
+            password: password,
+            confirm_password: confirm_password,
+            operation: currentOperation,
+          }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.code == 200) {
+              Swal.fire({
+                title: "成功",
+                text: data.msg,
+                icon: "success",
+              });
+              getUserInfo();
+            } else {
+              setTimeout(() => {
+                Swal.showValidationMessage("失败：" + data.msg);
+                Swal.enableButtons();
+              }, 127);
+            }
+          })
+          .catch((error) => {
+            console.error(error);
+          });
+      }
+      async function resetPassword() {
+        // 类似注册，但不需要输入其他信息
+        currentOperation = 2;
+        const regInfo = await Swal.fire({
+          title: "重置密码",
+          html: resetPasswordForm(),
+          focusConfirm: false,
+          showCancelButton: true,
+          confirmButtonText: "重置",
+          cancelButtonText: "取消",
+          allowOutsideClick: false,
+          customClass: {
+            popup: "sweet-popup",
+            confirmButton: "btn-confirm",
+            cancelButton: "btn-cancel",
+          },
+          preConfirm: () => {
+            return new Promise((resolve, reject) => {
+              const qq_id = document.querySelector("#qq_id").value;
+              const password = document.querySelector("#password").value;
+              const confirm_password =
+                document.querySelector("#confirm_password").value;
+              const verify_code = document.querySelector("#verify_code").value;
+              fetch("/bapi/verify", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  email: qq_id + "@qq.com",
+                  password: password,
+                  confirm_password: confirm_password,
+                  code: verify_code,
+                  operation: currentOperation,
+                }),
+              })
+                .then((response) => response.json())
+                .then((data) => {
+                  if (data.code == 200) {
+                    Swal.fire({
+                      title: "成功",
+                      text: data.msg,
+                      icon: "success",
+                    });
+                    getUserInfo();
+                  } else {
+                    setTimeout(() => {
+                      Swal.showValidationMessage("失败：" + data.msg);
+                      Swal.enableButtons();
+                    }, 127);
+                  }
+                })
+                .catch((error) => {
+                  console.error(error);
+                });
+              reject(); // 成功后会有另一个弹窗，因此此处不需要关闭
+            });
+          },
+        });
+      }
+      async function register(show_notice = false) {
+        // 打开注册弹窗
+        currentOperation = 1;
+        if (show_notice) {
+          await Swal.fire({
+            title: "提示",
+            html: `${currentUser.permission.admin_alert}`,
+            icon: "info",
+          });
+        }
+        const regInfo = await Swal.fire({
+          title: "注册",
+          html: currentUser.permission.admin_notice + registerForm(),
+          focusConfirm: false,
+          showCancelButton: !show_notice,
+          confirmButtonText: "注册",
+          cancelButtonText: "取消",
+          allowOutsideClick: !show_notice,
+          customClass: {
+            popup: "sweet-popup",
+            confirmButton: "btn-confirm",
+            cancelButton: "btn-cancel",
+          },
+          preConfirm: () => {
+            return new Promise((resolve, reject) => {
+              submitUserInfo();
+              reject(); // 成功后会有另一个弹窗，因此此处不需要关闭
+            });
+          },
+        });
+      }
+      function login() {
+        // GET /bapi/login -> {code:int, message:str, data:null}
+        const authInfo = Swal.fire({
+          title: "登录",
+          html: loginForm(),
+          focusConfirm: true,
+          showCancelButton: true,
+          confirmButtonText: "登录",
+          cancelButtonText: "取消",
+          allowOutsideClick: false,
+          customClass: {
+            popup: "sweet-popup",
+            confirmButton: "btn-confirm",
+            cancelButton: "btn-cancel",
+          },
+          preConfirm: () => {
+            return new Promise((resolve, reject) => {
+              const qq_id = document.querySelector("#qq_id").value;
+              const password = document.querySelector("#password").value;
+              const rememberMe = document.querySelector("#remember-me").checked;
+              fetch("/bapi/login", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  remember_me: rememberMe,
+                  qq_id: qq_id,
+                  password: password,
+                }),
+              })
+                .then((response) => response.json())
+                .then((data) => {
+                  if (data.code == 200) {
+                    Swal.fire({
+                      title: "成功",
+                      text: data.msg,
+                      icon: "success",
+                    });
+                    getUserInfo();
+                  } else {
+                    setTimeout(() => {
+                      Swal.showValidationMessage("失败：" + data.msg);
+                      Swal.enableButtons();
+                    }, 127);
+                  }
+                })
+                .catch((error) => {
+                  console.error(error);
+                });
+              reject(); // 成功后会有另一个弹窗，因此此处不需要关闭
+            });
+          },
+        });
+      }
+      async function logout() {
+        // GET /bapi/logout -> {code:int, message:str, data:null}
+        const confirmed = await Swal.fire({
+          title: "确认登出",
+          text: "确认要退出当前账号吗？",
+          icon: "warning",
+          showCancelButton: true,
+          confirmButtonText: "确认",
+          cancelButtonText: "取消",
+        });
+        if (!confirmed.isConfirmed) {
+          return;
+        }
+        fetch("/bapi/logout", {
+          method: "GET",
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.code == 200) {
+              Swal.fire({
+                title: "登出成功",
+                text: data.msg,
+                icon: "success",
+              });
+              getUserInfo();
+            } else {
+              setTimeout(() => {
+                Swal.showValidationMessage("失败：" + data.msg);
+                Swal.enableButtons();
+              }, 127);
+            }
+          })
+          .catch((error) => {
+            console.error(error);
+          });
+      }
+
+      async function getDicts() {
+        // GET /bapi/tables -> {table_id: table_name}
+        return await fetch("/bapi/dicts")
+          .then((response) => response.json())
+          .then((data) => {
+            data = data.data;
+            tables = data.tables;
+            reasons = data.reasons;
+            operations = data.operations;
+          })
+          .catch((error) => {
+            console.error(error);
+          });
+      }
+      function getLatestLog(option = null) {
+        // GET /bapi/latest_log -> [(uid:int, create_time:timestamp, nickname:str, date:timestamp, reasons:str, recorder:str, recorder_qq_id:int, remark:str, last_edit_time, table_id, operation)]
+        const pageInfo = getPageInfo(option);
+        fetch("/bapi/latest_log", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            page: pageInfo.page,
+            limit: pageInfo.limit, // 每页展示条数
+          }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            const result_target = document.querySelector("#result-list");
+            const results = [logHeader]; // 这是log，不是result
+            data = data.data;
+            data.result.forEach((log) => {
+              let mail = "";
+              if (log[6]) mail = log[6] + "@qq.com<br>";
+              if (log[11] === -1) mail += "<span class='wheat'>系统操作</span>";
+              else mail += `<span class='wheat'>${log[11]}@qq.com</span>`;
+              let date = "";
+              if (log[3]) date = new Date(log[3] * 1000).toLocaleString();
+              let table_name = "";
+              if (log[9]) table_name = tables[log[9]];
+              results.push([
+                interpretOperation(log[10]),
+                log[0],
+                new Date(log[1] * 1000).toLocaleString(),
+                log[2],
+                date,
+                interpretReason(log[4]),
+                log[5],
+                mail,
+                log[7],
+                new Date(log[8] * 1000).toLocaleString(),
+                table_name,
+              ]);
+            });
+            document.querySelector("#result-title").innerHTML =
+              "<h2>最新添加记录</h2>";
+            updatePageData(data.page_max, data.page);
+            fillDataToTable(results, result_target);
+          })
+          .catch((error) => {
+            console.error(error);
+          });
+      }
+      function getResultList(list, keyword) {
+        const results = [resultHeader];
+        list.forEach((log) => {
+          let mail = "";
+          if (log[6]) mail = log[6] + "@qq.com";
+          results.push([
+            log[0],
+            new Date(log[1] * 1000).toLocaleString(),
+            log[2],
+            new Date(log[3] * 1000).toLocaleString(),
+            interpretReason(log[4]),
+            log[5],
+            mail,
+            log[7],
+            new Date(log[8] * 1000).toLocaleString(),
+            tables[log[9]],
+          ]);
+        });
+        return results;
+      }
+      function appendOperationBtn(list, table_target) {
+        // list的每一项对应table的每一行，在每行添加一列
+        for (let i = 0; i < list.length; i++) {
+          const row = table_target.rows[i + 1];
+          const log = list[i];
+          console.log(log, currentUser);
+          const operation_html = getUserOperation(
+            log[6] === currentUser.qq_id,
+            currentUser.permission.modify_other_users,
+            log
+          );
+          const cell = row.insertCell(row.cells.length);
+          cell.innerHTML = operation_html;
+        }
+      }
+      function search(option = null) {
+        // POST /bapi/search {keyword:str, page:int, limit:int} -> {page_max:int, data:[(uid:int, create_time:timestamp, nickname:str, date:timestamp, reasons:str, recorder:str, recorder_qq_id:int, remark:str, last_edit_time, table_id)]}
+        // GET /bapi/my_blacklist -> {page_max:int, data:[(uid:int, create_time:timestamp, nickname:str, date:timestamp, reasons:str, recorder:str, recorder_qq_id:int, remark:str, last_edit_time, table_id)]}
+        const input = document.querySelector("#key");
+        const keyword = input.value;
+        if (keyword === "") {
+          getLatestLog(option);
+          return;
+        }
+        if (keyword === "add_by_me") {
+          if (currentUser.permission.login_required) {
+            login();
+            return;
+          }
+        }
+
+        const pageInfo = getPageInfo(option);
+        if (currentKey != keyword) {
+          currentKey = keyword;
+          pageInfo.page = 1;
+        }
+        fetch("/bapi/search", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            keyword: keyword,
+            page: pageInfo.page,
+            limit: pageInfo.limit, // 每页展示条数
+          }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            const table_target = document.querySelector("#result-list");
+            document.querySelector(
+              "#result-title"
+            ).innerHTML = `<h2>${keyword} 的搜索结果:</h2><span>${data.msg}</span>`;
+            if (data.code !== 200) {
+              Swal.fire({
+                title: "搜索失败",
+                text: data.msg,
+                icon: "error",
+              });
+            }
+            data = data.data;
+            const results = getResultList(data.result, keyword);
+            updatePageData(data.page_max, data.page);
+            fillDataToTable(results, table_target, keyword);
+            appendOperationBtn(data.result, table_target);
+          })
+          .catch((error) => {
+            console.error(error);
+          });
+      }
+      function addBlacklist() {
+        // POST /bapi/add_blacklist {uid:int, date:timestamp, reasons:str, recorder:str, recorder_qq_id:int, remark:str, table_id:int} -> {success:bool, message:str}
+        const date = new Date().toISOString();
+        const reasons_str = document.querySelector("#reasons").value;
+        const recorder = currentUser.nickname;
+        const recorder_qq_id = currentUser.qq_id;
+        const remark = document.querySelector("#remark").value;
+        const table_id = parseInt(document.querySelector("#table_id").value);
+        const reasons_arr = reasons_str.split(",");
+        const reasons_int_arr = reasons_arr.map((r) => parseInt(r));
+        fetch("/bapi/add_blacklist", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            uid: parseInt(document.querySelector("#uid").value),
+            date: date,
+            reasons: reasons_int_arr,
+            recorder: recorder,
+            recorder_qq_id: recorder_qq_id,
+            remark: remark,
+            table_id: table_id,
+          }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            console.log(data);
+            if (data.code == 200) {
+              Swal.fire({
+                title: "添加成功",
+                text: data.msg,
+                icon: "success",
+              });
+            } else {
+              Swal.fire({
+                title: "添加失败",
+                text: data.msg,
+                icon: "error",
+              });
+            }
+          })
+          .catch((error) => {
+            console.error(error);
+          });
+      }
+      async function deleteBlacklist(uid, create_time) {
+        // POST /bapi/delete {uid:int, create_time:int} -> {code:int, message:str, data:null}
+        const confirmed = await Swal.fire({
+          title: "确认删除",
+          text: "确认要删除该条黑名单记录吗？该操作不可撤销",
+          icon: "warning",
+          showCancelButton: true,
+          confirmButtonText: "确认",
+          cancelButtonText: "取消",
+        });
+        if (!confirmed.isConfirmed) {
+          return;
+        }
+        fetch("/bapi/delete", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            uid: uid,
+            create_time: create_time,
+          }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            console.log(data);
+            if (data.code == 200) {
+              Swal.fire({
+                title: "删除成功",
+                text: data.msg,
+                icon: "success",
+              });
+            } else {
+              Swal.fire({
+                title: "删除失败",
+                text: data.msg,
+                icon: "error",
+              });
+            }
+          })
+          .catch((error) => {
+            console.error(error);
+          });
+      }
+
+      function eventSearch(event, option = null) {
+        if (
+          event.type === "blur" ||
+          event.type === "click" ||
+          event.type === "change" ||
+          event.key === "Enter"
+        ) {
+          search(option);
+        }
+      }
+
+      window.onload = async function () {
+        toggleDarkMode();
+        getUserInfo();
+        await getDicts();
+        setupPageUtils(document.querySelector("#page-utils"), "eventSearch");
+        getLatestLog();
+        document
+          .querySelector("#key")
+          .addEventListener("keydown", function (event) {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              search();
+            }
+          });
+      };
+
+      // 绑定Enter到确认按钮
+      window.addEventListener("keydown", function (event) {
+        if (event.key === "Enter" && Swal.getTitle() !== null) {
+          event.preventDefault();
+          Swal.clickConfirm();
+        }
+      });
+    </script>
+  </body>
+</html>

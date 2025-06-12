@@ -1,0 +1,89 @@
+.pink {
+  background-color: #ffc0cbaa;
+}
+.dark-pink {
+  background-color: #ffc0cbff;
+}
+.orange {
+  background-color: #ffa500aa;
+}
+.dark-orange {
+  background-color: #ffa500ff;
+}
+.yellow {
+  background-color: #ffff00aa;
+}
+.dark-yellow {
+  background-color: #ffff00ff;
+}
+.aquamarine {
+  background-color: #7fffd4aa;
+}
+.dark-aquamarine {
+  background-color: #7fffd4ff;
+}
+.skyblue {
+  background-color: #87ceebaa;
+}
+.dark-skyblue {
+  background-color: #87ceebff;
+}
+.cyan {
+  background-color: #00ffffaa;
+}
+.dark-cyan {
+  background-color: #00ffffff;
+}
+.violet {
+  background-color: #ee82eeaa;
+}
+.dark-violet {
+  background-color: #ee82eeff;
+}
+.wheat {
+  /* 背景色-1 */
+  background-color: #f5deb3aa;
+}
+.dark-wheat {
+  background-color: #f5deb3ff;
+}
+.lightgrey {
+  /* 背景色-2 */
+  background-color: #d3d3d3aa;
+}
+.dark-lightgrey {
+  background-color: #d3d3d3ff;
+}
+.pink,
+.orange,
+.yellow,
+.aquamarine,
+.skyblue,
+.cyan,
+.violet,
+.wheat,
+.lightgrey {
+  padding: 1px;
+  margin: 1px;
+  border-radius: 5px;
+  opacity: 0.8;
+  line-height: 1.5;
+  text-wrap: nowrap;
+}
+.dark-pink,
+.dark-orange,
+.dark-yellow,
+.dark-aquamarine,
+.dark-skyblue,
+.dark-cyan,
+.dark-violet,
+.dark-wheat,
+.dark-lightgrey {
+  margin: 1px;
+  padding: 1px;
+  border-radius: 5px;
+  opacity: 0.8;
+  line-height: 1.5;
+  text-wrap: nowrap;
+  color: black;
+}

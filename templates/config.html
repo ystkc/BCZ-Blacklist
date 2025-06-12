@@ -1,0 +1,822 @@
+<!-- 配置修改简易页面 -->
+<!-- GET /bapi/config -> Object{config_key:config_value} -->
+<!-- POST /bapi/update_config -> Object{config_key:config_value}(需要完整的config对象) -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>系统配置管理</title>
+    <!-- https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css -->
+    <link
+      rel="stylesheet"
+      href="/static/css/font-awesome.min.css"
+      integrity="sha512-SfTiTlX6kk+qitfevl/7LibUOeJWlt9rbyDn92a1DqWOw9vWG2MFoays0sgObmWazO5BQPiFucnnEAjpAB+/Sw=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      }
+
+      body {
+        background: linear-gradient(135deg, #1a2a6c, #b21f1f, #1a2a6c);
+        color: #333;
+        min-height: 100vh;
+        padding: 20px;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+
+      header {
+        text-align: center;
+        padding: 30px 20px;
+        margin-bottom: 30px;
+      }
+
+      h1 {
+        color: white;
+        font-size: 2.8rem;
+        margin-bottom: 15px;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+      }
+
+      .subtitle {
+        color: rgba(255, 255, 255, 0.85);
+        font-size: 1.2rem;
+        max-width: 700px;
+        margin: 0 auto;
+        line-height: 1.6;
+      }
+
+      .dashboard {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 30px;
+      }
+
+      @media (min-width: 992px) {
+        .dashboard {
+          grid-template-columns: 2fr 1fr;
+        }
+      }
+
+      .config-panel {
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        overflow: hidden;
+      }
+
+      .panel-header {
+        padding: 25px 30px;
+        background: linear-gradient(90deg, #4b6cb7, #182848);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .panel-title {
+        display: flex;
+        align-items: center;
+        font-size: 1.5rem;
+      }
+
+      .panel-title i {
+        margin-right: 12px;
+        font-size: 1.8rem;
+      }
+
+      .config-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      .config-table th {
+        background-color: #f8f9fa;
+        padding: 16px 20px;
+        text-align: left;
+        font-weight: 600;
+        color: #495057;
+        border-bottom: 2px solid #e9ecef;
+      }
+
+      .config-table td {
+        padding: 20px;
+        border-bottom: 1px solid #e9ecef;
+      }
+
+      .config-table tr:last-child td {
+        border-bottom: none;
+      }
+
+      .config-key {
+        font-weight: 600;
+        color: #2c3e50;
+        white-space: nowrap;
+        width: 30%;
+      }
+
+      .config-value {
+        width: 70%;
+      }
+
+      .config-input {
+        width: 100%;
+        padding: 12px 15px;
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+        font-size: 1rem;
+        transition: all 0.3s ease;
+      }
+
+      .config-input:focus {
+        outline: none;
+        border-color: #4b6cb7;
+        box-shadow: 0 0 0 4px rgba(75, 108, 183, 0.2);
+      }
+
+      .actions-cell {
+        width: 100px;
+        text-align: center;
+      }
+
+      .save-btn {
+        background: #28a745;
+        color: white;
+        border: none;
+        padding: 8px 15px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.3s;
+        font-weight: 500;
+      }
+
+      .save-btn:hover {
+        background: #218838;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      }
+
+      .save-btn:active {
+        transform: translateY(0);
+      }
+
+      .save-btn i {
+        margin-right: 5px;
+      }
+
+      .stats-panel {
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        padding: 30px;
+        height: fit-content;
+      }
+
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 20px;
+      }
+
+      .stat-card {
+        background: linear-gradient(135deg, #3498db, #8e44ad);
+        color: white;
+        padding: 20px;
+        border-radius: 12px;
+        text-align: center;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+      }
+
+      .stat-value {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 5px;
+      }
+
+      .stat-label {
+        font-size: 0.9rem;
+        opacity: 0.9;
+      }
+
+      .instructions {
+        background: #e9f7fe;
+        border-left: 4px solid #3498db;
+        padding: 20px;
+        margin: 30px 0;
+        border-radius: 0 8px 8px 0;
+      }
+
+      .instructions h3 {
+        color: #2980b9;
+        margin-bottom: 15px;
+        font-size: 1.3rem;
+      }
+
+      .instructions ul {
+        padding-left: 20px;
+      }
+
+      .instructions li {
+        margin-bottom: 10px;
+        line-height: 1.6;
+      }
+
+      .bulk-actions {
+        display: flex;
+        justify-content: center;
+        padding: 30px;
+        gap: 20px;
+      }
+
+      .btn {
+        padding: 14px 28px;
+        border: none;
+        border-radius: 10px;
+        font-size: 1.1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .btn-primary {
+        background: linear-gradient(135deg, #3498db, #2c3e50);
+        color: white;
+      }
+
+      .btn-primary:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 7px 14px rgba(52, 152, 219, 0.3);
+      }
+
+      .btn-secondary {
+        background: #e9ecef;
+        color: #495057;
+      }
+
+      .btn-secondary:hover {
+        background: #dee2e6;
+      }
+
+      .btn i {
+        margin-right: 8px;
+        font-size: 1.2rem;
+      }
+
+      .footer {
+        text-align: center;
+        color: rgba(255, 255, 255, 0.7);
+        margin-top: 40px;
+        padding: 20px;
+        font-size: 0.9rem;
+      }
+
+      /* Loading state */
+      .loading {
+        position: relative;
+        opacity: 0.7;
+        pointer-events: none;
+      }
+
+      .loading::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.5);
+        z-index: 10;
+      }
+
+      /* Toast notification */
+      .toast {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: white;
+        color: #155724;
+        padding: 15px 25px;
+        border-radius: 8px;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        display: flex;
+        align-items: center;
+        transform: translateX(110%);
+        transition: transform 0.3s ease;
+        z-index: 1000;
+      }
+
+      .toast.show {
+        transform: translateX(0);
+      }
+
+      .toast i {
+        margin-right: 10px;
+        font-size: 1.4rem;
+      }
+
+      .toast.error {
+        color: #721c24;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>系统配置管理中心</h1>
+        <p class="subtitle">
+          管理系统的关键配置参数。所有值均为文本格式，修改后请及时保存以确保配置生效。
+        </p>
+      </header>
+
+      <div class="dashboard">
+        <div class="config-panel">
+          <div class="panel-header">
+            <h2 class="panel-title">
+              <i class="fa fa-sliders-h"></i> 系统配置参数
+            </h2>
+            <div class="stats">
+              <span id="config-count">加载中...</span>
+            </div>
+          </div>
+
+          <div class="instructions">
+            <h3><i class="fa fa-info-circle"></i> 使用说明</h3>
+            <ul>
+              <li>每个配置项可单独修改并保存</li>
+              <li>或使用下方的"保存所有变更"按钮批量提交更改</li>
+              <li>所有值均为文本格式，请按需配置</li>
+              <li>
+                API地址: <code>/bapi/config</code> (GET) 和
+                <code>/bapi/update_config</code> (POST)
+              </li>
+            </ul>
+          </div>
+
+          <div id="config-container">
+            <!-- Config table will be populated here -->
+            <div style="padding: 40px; text-align: center">
+              <i
+                class="fa fa-circle-notch fa-spin"
+                style="font-size: 2rem; color: #3498db"
+              ></i>
+              <p style="margin-top: 20px">正在加载配置数据...</p>
+            </div>
+          </div>
+
+          <div class="bulk-actions">
+            <button id="save-all-btn" class="btn btn-primary">
+              <i class="fa fa-save"></i> 保存所有变更
+            </button>
+            <button id="reload-btn" class="btn btn-secondary">
+              <i class="fa fa-sync"></i> 重新加载
+            </button>
+          </div>
+        </div>
+
+        <div class="stats-panel">
+          <h2 style="margin-bottom: 25px; display: flex; align-items: center">
+            <i class="fa fa-chart-line" style="margin-right: 12px"></i> 系统概览
+          </h2>
+
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-value" id="modified-count">0</div>
+              <div class="stat-label">待保存变更</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="total-count">0</div>
+              <div class="stat-label">配置项总数</div>
+            </div>
+          </div>
+
+          <div style="margin-top: 35px">
+            <h3 style="margin-bottom: 15px; color: #2c3e50">最近操作记录</h3>
+            <div id="activity-log" style="height: 200px; overflow-y: auto">
+              <div
+                class="log-entry"
+                style="padding: 10px; border-bottom: 1px solid #eee"
+              >
+                <i
+                  class="fa fa-info-circle"
+                  style="color: #3498db; margin-right: 8px"
+                ></i>
+                <span>等待操作记录...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer">
+        <p>系统配置管理面板 &copy; 2023 | 设计用于配置管理API</p>
+      </div>
+    </div>
+
+    <div class="toast" id="toast">
+      <i class="fa fa-check-circle"></i>
+      <span id="toast-message">操作成功!</span>
+    </div>
+
+    <script>
+      // Mock API endpoints for demo (in a real app, these would point to your actual backend)
+      const CONFIG_API = "/bapi/config";
+      const UPDATE_API = "/bapi/update_config";
+
+      // Global state
+      let originalConfig = {};
+      let currentConfig = {};
+      let modifiedKeys = new Set();
+
+      // DOM Elements
+      const configContainer = document.getElementById("config-container");
+      const saveAllBtn = document.getElementById("save-all-btn");
+      const reloadBtn = document.getElementById("reload-btn");
+      const modifiedCountEl = document.getElementById("modified-count");
+      const totalCountEl = document.getElementById("total-count");
+      const configCountEl = document.getElementById("config-count");
+      const activityLog = document.getElementById("activity-log");
+      const toast = document.getElementById("toast");
+      const toastMessage = document.getElementById("toast-message");
+
+      // Initialize
+      document.addEventListener("DOMContentLoaded", init);
+
+      async function init() {
+        try {
+          // Show loading state
+          configContainer.innerHTML = `
+                    <div style="padding: 40px; text-align: center;">
+                        <i class="fa fa-circle-notch fa-spin" style="font-size: 2rem; color: #3498db;"></i>
+                        <p style="margin-top: 20px;">正在加载配置数据...</p>
+                    </div>
+                `;
+
+          // Fetch config data
+          const config = await fetchConfig();
+
+          // Update state
+          originalConfig = { ...config };
+          currentConfig = { ...config };
+
+          // Render config table
+          renderConfigTable();
+
+          // Update stats
+          updateStats();
+        } catch (error) {
+          showError("加载配置失败: " + error.message);
+          configContainer.innerHTML = `
+                    <div style="padding: 40px; text-align: center; color: #721c24;">
+                        <i class="fa fa-exclamation-triangle" style="font-size: 2rem;"></i>
+                        <p style="margin-top: 20px;">配置加载失败: ${error.message}</p>
+                        <button id="retry-btn" class="btn btn-primary" style="margin-top: 20px;">
+                            <i class="fa fa-redo"></i> 重试
+                        </button>
+                    </div>
+                `;
+
+          document.getElementById("retry-btn").addEventListener("click", init);
+        }
+      }
+
+      // Fetch configuration from backend
+      async function fetchConfig() {
+        return await fetch(CONFIG_API)
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.code !== 200) {
+              document.querySelector(
+                "#config-count"
+              ).textContent = `${data.code}: ${data.msg}`;
+              throw new Error(data.msg);
+            }
+            return data.data;
+          })
+          .catch((error) => {
+            throw new Error("获取配置失败:" + error.message);
+          });
+      }
+
+      // Render config table
+      function renderConfigTable() {
+        const keys = Object.keys(currentConfig);
+
+        if (keys.length === 0) {
+          configContainer.innerHTML = `<p style="padding: 40px; text-align: center;">没有找到任何配置项</p>`;
+          return;
+        }
+
+        configCountEl.textContent = `${keys.length} 个配置项`;
+
+        let tableHTML = `
+                <table class="config-table">
+                    <thead>
+                        <tr>
+                            <th>配置键</th>
+                            <th>配置值</th>
+                            <th class="actions-cell">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+        keys.forEach((key) => {
+          const value = currentConfig[key];
+          const isModified = modifiedKeys.has(key);
+
+          tableHTML += `
+                    <tr>
+                        <td class="config-key">${key}</td>
+                        <td class="config-value">
+                            <input 
+                                type="text" 
+                                class="config-input ${
+                                  isModified ? "modified" : ""
+                                }" 
+                                data-key="${key}" 
+                                value="${value}" 
+                                ${
+                                  isModified
+                                    ? 'style="border-color: #3498db; background-color: #e9f7fe;"'
+                                    : ""
+                                }
+                            >
+                        </td>
+                        <td class="actions-cell">
+                            <button 
+                                class="save-btn ${
+                                  isModified ? "" : "disabled"
+                                }" 
+                                data-key="${key}"
+                                ${isModified ? "" : "disabled"}
+                            >
+                                <i class="fa fa-save"></i> 保存
+                            </button>
+                        </td>
+                    </tr>
+                `;
+        });
+
+        tableHTML += `</tbody></table>`;
+        configContainer.innerHTML = tableHTML;
+
+        // Add event listeners
+        document.querySelectorAll(".config-input").forEach((input) => {
+          input.addEventListener("input", handleConfigChange);
+          input.addEventListener("change", handleConfigChange);
+        });
+
+        document.querySelectorAll(".save-btn").forEach((btn) => {
+          btn.addEventListener("click", handleSaveSingle);
+        });
+      }
+
+      // Handle config input change
+      function handleConfigChange(e) {
+        const key = e.target.dataset.key;
+        const value = e.target.value;
+
+        // Update current config state
+        currentConfig[key] = value;
+
+        // Check if different from original
+        if (originalConfig[key] !== value) {
+          modifiedKeys.add(key);
+          e.target.style.borderColor = "#3498db";
+          e.target.style.backgroundColor = "#e9f7fe";
+        } else {
+          modifiedKeys.delete(key);
+          e.target.style.borderColor = "";
+          e.target.style.backgroundColor = "";
+        }
+
+        // Update save button state for this row
+        const saveBtn = document.querySelector(`.save-btn[data-key="${key}"]`);
+        if (saveBtn) {
+          if (modifiedKeys.has(key)) {
+            saveBtn.disabled = false;
+            saveBtn.classList.remove("disabled");
+          } else {
+            saveBtn.disabled = true;
+            saveBtn.classList.add("disabled");
+          }
+        }
+
+        updateStats();
+      }
+
+      // Handle save single config
+      async function handleSaveSingle(e) {
+        const key = e.target.dataset.key;
+
+        try {
+          // In a real app, this would be sent to the backend
+          await saveConfig({ [key]: currentConfig[key] });
+
+          // Update original config
+          originalConfig[key] = currentConfig[key];
+          modifiedKeys.delete(key);
+
+          // Update UI
+          const input = document.querySelector(
+            `.config-input[data-key="${key}"]`
+          );
+          if (input) {
+            input.style.borderColor = "";
+            input.style.backgroundColor = "";
+          }
+
+          e.target.disabled = true;
+          e.target.classList.add("disabled");
+
+          // Log activity
+          logActivity(`配置项更新: ${key}`);
+          updateStats();
+
+          // Show success
+          showToast(`配置项 "${key}" 更新成功`);
+        } catch (error) {
+          showError(`保存 "${key}" 失败: ${error.message}`);
+        }
+      }
+
+      // Handle save all changes
+      async function handleSaveAll() {
+        if (modifiedKeys.size === 0) {
+          showToast("没有需要保存的变更", true);
+          return;
+        }
+
+        // Disable UI during operation
+        const container = configContainer;
+        container.classList.add("loading");
+        saveAllBtn.disabled = true;
+        saveAllBtn.innerHTML =
+          '<i class="fa fa-circle-notch fa-spin"></i> 保存中...';
+
+        try {
+          // Create object with only modified keys
+          const modifiedConfig = {};
+          modifiedKeys.forEach((key) => {
+            modifiedConfig[key] = currentConfig[key];
+          });
+
+          // In a real app, this would be sent to the backend
+          await saveConfig(modifiedConfig);
+
+          // Update original config to match changes
+          Object.keys(modifiedConfig).forEach((key) => {
+            originalConfig[key] = modifiedConfig[key];
+          });
+
+          // Clear modified keys
+          modifiedKeys.clear();
+
+          // Reset UI
+          document.querySelectorAll(".config-input").forEach((input) => {
+            input.style.borderColor = "";
+            input.style.backgroundColor = "";
+
+            // Disable save buttons
+            const key = input.dataset.key;
+            const saveBtn = document.querySelector(
+              `.save-btn[data-key="${key}"]`
+            );
+            if (saveBtn) {
+              saveBtn.disabled = true;
+              saveBtn.classList.add("disabled");
+            }
+          });
+
+          // Log activity
+          logActivity(`批量保存: ${modifiedKeys.size} 项更新`);
+          updateStats();
+
+          // Show success
+          showToast(`成功保存 ${modifiedKeys.size} 个配置项`);
+        } catch (error) {
+          showError("保存失败: " + error.message);
+        } finally {
+          container.classList.remove("loading");
+          saveAllBtn.disabled = false;
+          saveAllBtn.innerHTML = '<i class="fa fa-save"></i> 保存所有变更';
+        }
+      }
+
+      // Handle reload
+      function handleReload() {
+        // Reset all changes
+        currentConfig = { ...originalConfig };
+        modifiedKeys.clear();
+
+        // Update UI
+        document.querySelectorAll(".config-input").forEach((input) => {
+          const key = input.dataset.key;
+          input.value = originalConfig[key];
+          input.style.borderColor = "";
+          input.style.backgroundColor = "";
+
+          // Disable save buttons
+          const saveBtn = document.querySelector(
+            `.save-btn[data-key="${key}"]`
+          );
+          if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.classList.add("disabled");
+          }
+        });
+
+        updateStats();
+        logActivity("所有变更已取消，重新加载配置");
+        showToast("配置已恢复至上次保存状态");
+      }
+
+      async function saveConfig(changes) {
+        return await fetch(UPDATE_API, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(changes),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.code !== 200) {
+              throw new Error(data.msg);
+            }
+          })
+          .catch((error) => {
+            throw new Error("保存配置失败:" + error.message);
+          });
+      }
+
+      // Update statistics display
+      function updateStats() {
+        totalCountEl.textContent = Object.keys(currentConfig).length;
+        modifiedCountEl.textContent = modifiedKeys.size;
+      }
+
+      // Log activity
+      function logActivity(message) {
+        const now = new Date();
+        const timeStr = now.toTimeString().substring(0, 8);
+
+        const logEntry = document.createElement("div");
+        logEntry.className = "log-entry";
+        logEntry.innerHTML = `
+                <i class="fa fa-info-circle" style="color: #3498db; margin-right: 8px;"></i>
+                <span>${timeStr} - ${message}</span>
+            `;
+
+        activityLog.prepend(logEntry);
+
+        // Limit to 10 entries
+        if (activityLog.children.length > 10) {
+          activityLog.removeChild(activityLog.lastChild);
+        }
+      }
+
+      // Show toast notification
+      function showToast(message, isError = false) {
+        toastMessage.textContent = message;
+
+        if (isError) {
+          toast.classList.add("error");
+          toast.innerHTML = `<i class="fa fa-exclamation-triangle"></i> ${message}`;
+        } else {
+          toast.classList.remove("error");
+          toast.innerHTML = `<i class="fa fa-check-circle"></i> ${message}`;
+        }
+
+        toast.classList.add("show");
+
+        setTimeout(() => {
+          toast.classList.remove("show");
+        }, 3000);
+      }
+
+      // Show error
+      function showError(message) {
+        console.error(message);
+        showToast(message, true);
+      }
+
+      // Event listeners
+      saveAllBtn.addEventListener("click", handleSaveAll);
+      reloadBtn.addEventListener("click", handleReload);
+    </script>
+  </body>
+</html>

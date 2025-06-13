@@ -278,6 +278,11 @@ class blacklist_server_class:
             if recorder_qq_id not in self.blacklist_recorder:
                 self.blacklist_recorder[recorder_qq_id] = {}
             self.blacklist_recorder[recorder_qq_id][id] = tp
+        if recorder:
+            if recorder not in self.blacklist_cnt:
+                self.blacklist_cnt[recorder] = 0
+            if not old_tp:
+                self.blacklist_cnt[recorder] += 1
         if save_db:
             self.update_db(uid, create_time, nickname, date, reason_id_list, recorder, recorder_qq_id, remark, last_edit_time, table_id, operation, user)
         else:
@@ -303,6 +308,7 @@ class blacklist_server_class:
             id = (uid, create_time)
             if recorder_qq_id in self.blacklist_recorder:
                 del self.blacklist_recorder[recorder_qq_id][id] # 删除记录时用的是原记录者的qq_id
+                self.blacklist_cnt[recorder] -= 1
             del self.blacklist[uid][create_time]
             del self.blacklist_str[uid][create_time]
             self.delete_from_db(uid, create_time, nickname, date, reason_id_list, recorder, recorder_qq_id, remark, last_edit_time, table_id, OPERATION_TYPE_DELETE, user)
@@ -371,23 +377,22 @@ class blacklist_server_class:
     def __init__(self, blacklist_db_path):
         self.logger = logging.getLogger(__name__)
         self.has_admin = False # 如果没有管理员，则要求立即注册一个
-        self.hash_index = 0
-        self.hash_dict = {}
         self.blacklist = {}
-        self.blacklist_str = {}
-        self.blacklist_buffer = []
-        self.blacklist_log = []
-        self.blacklist_log_cnt = 0
-        self.blacklist_recorder = {}
+        self.blacklist_str = {} # 每条记录的字符串形式，方便搜索
+        self.blacklist_buffer = [] # 批量处理时的缓冲区
+        self.blacklist_log = [] # 黑名单操作内存日志
+        self.blacklist_log_cnt = 0 # 黑名单操作内存日志计数
+        self.blacklist_recorder = {} # 按创建者分组的黑名单记录，方便用户查找自己的记录
+        self.blacklist_cnt = {} # 记录每个用户记录的黑名单数量（按昵称统计，方便修复黑名单）
         self.last_email_sent_time = 0
         self.email_cache = {}  # 邮箱验证码缓存
-        self.result = []
+        self.result = [] # 搜索结果缓存
+        self.result_keyword = "" # 当前搜索结果缓存的关键字
         self.result_len = 0
-        self.reason_dict = {}
-        self.reason_id_lookup = {}
-        self.reason_buffer = []
-        self.reason_max_id = 0
-        self.result_keyword = ""
+        self.reason_dict = {} # 原因名称和ID的映射
+        self.reason_id_lookup = {} # 原因ID和名称的映射
+        self.reason_buffer = [] # 批量添加原因时的原因缓冲区
+        self.reason_max_id = 0 # 最大原因ID，用于自动生成ID为新的原因
         self.blacklist_db_path = blacklist_db_path
         # 初始化数据库
         self.logger.info("正在初始化 黑名单数据库")
@@ -563,12 +568,21 @@ class blacklist_server_class:
         cursor.close()
         conn.close()
 
+    def get_count_list(self):
+        '''获取记录过黑名单的用户(昵称,qq_id)，按记录的多少排序'''
+        # 先将所有(用户nickname,qq_id,记录数)组成列表
+        result = []
+        for nickname, cnt in self.blacklist_cnt.items():
+            result.append((self.user_name_to_id.get(nickname), nickname, cnt))
+        # 按记录数排序
+        result.sort(key=lambda x:x[2], reverse=True)
+        return result
+
     def get_my_records(self, qq_id, page, limit):
         '''获取该用户添加的黑名单记录（page从1开始）'''
         tot = list(self.blacklist_recorder.get(qq_id, {}).values())
         page_max = (len(tot)-1)//limit+1
         page = max(1, min(page, page_max))
-        print(tot, page_max, page)
         return {'result': tot[page*limit-limit:page*limit], 'page_max': page_max, 'page': page}
     
     def get_dicts(self):

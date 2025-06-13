@@ -1,0 +1,22 @@
+<html>
+<textarea type="text" id="a" style="width: 100%; height: 90%;"></textarea>
+<button onclick="submit()">提交</button>
+<script>
+    function submit() {
+  var input = document.querySelector("#a");
+  var value = input.value;
+  fetch("/oapi/bulk", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      qq: value
+    })
+  })
+   .then(response => response.json())
+   .then(data => alert(data))
+   .catch(error => console.error(error));
+}
+</script>
+</html>

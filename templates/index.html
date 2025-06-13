@@ -3,6 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script charset="UTF-8" id="LA_COLLECT" src="//sdk.51.la/js-sdk-pro.min.js"></script>
+    <script>LA.init({id:"3LTNMctPRNmiv7MN",ck:"3LTNMctPRNmiv7MN"})</script>
     <!-- https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css -->
     <link
       rel="stylesheet"
@@ -536,8 +538,8 @@
         }
         return `
       <div class="form-group">
-        <label for="qq_id">邮箱</label>
-        <input type="number" class="form-control" id="qq_id" placeholder="请输入邮箱" onblur="checkEmailType()" ${email_readonly_tag} value="${qq_id}">@qq.com
+        <label for="username">邮箱</label>
+        <input type="number" class="form-control" id="username" placeholder="请输入邮箱" onblur="checkEmailType()" ${email_readonly_tag} value="${qq_id}">@qq.com
       </div>
       <div class="form-group">
         <label for="type">类型</label>
@@ -565,8 +567,8 @@
         return (
           `
       <div class="form-group">
-        <label for="qq_id">邮箱</label>
-        <input type="number" class="form-control" id="qq_id" placeholder="请输入邮箱">@qq.com
+        <label for="username">邮箱</label>
+        <input type="number" class="form-control" id="username" placeholder="请输入邮箱">@qq.com
       </div>
       <div class="form-group">
         <label for="password">密码</label>
@@ -586,8 +588,8 @@
         return (
           `
       <div class="form-group">
-        <label for="qq_id">邮箱</label>
-        <input type="number" class="form-control" id="qq_id" placeholder="请输入邮箱">@qq.com
+        <label for="username">邮箱</label>
+        <input type="number" class="form-control" id="username" placeholder="请输入邮箱">@qq.com
       </div>` +
           passwordForm(true) +
           verifyForm() +
@@ -600,7 +602,7 @@
       }
 
       function checkEmailType() {
-        const qq_id = document.querySelector("#qq_id");
+        const qq_id = document.querySelector("#username");
         if (qq_id.value === "") {
           return;
         }
@@ -1129,8 +1131,8 @@
       function getUserOperation(isSelf, isAdmin, log) {
         let operation_html = "";
         if (isSelf || isAdmin) {
-          operation_html = `<div class="btn" onclick="deleteBlacklist(${log[0]}, ${log[1]})"><i class="fa fa-trash"></i></div>
-          <div class="btn" onclick="showEditBox([${log[0]},${log[1]},'${log[2]}',${log[3]},'${log[4]}','${log[5]}',${log[6]},'${log[7]}',${log[8]},${log[9]}])"><i class="fa fa-edit"></i></div>`;
+          operation_html = `<div class="btn" onclick="deleteBlacklist(${log[0]}, ${log[1]})"><i class="fa fa-trash"></i>删除</div>
+          <div class="btn" onclick="showEditBox([${log[0]},${log[1]},'${log[2]}',${log[3]},'${log[4]}','${log[5]}',${log[6]},'${log[7]}',${log[8]},${log[9]}])"><i class="fa fa-edit"></i>编辑</div>`;
         }
         return operation_html;
       }
@@ -1167,7 +1169,7 @@
             }
             document.querySelector("#user-info").innerHTML = `
                 <img class="avatar" src="${currentUser.avatar}" alt="${currentUser.nickname}">
-                <h4 onclick="if(currentUser.login_required)login()">${currentUser.nickname}</h4>
+                <h4 onclick="if(currentUser.permission.login_required)login()">${currentUser.nickname}</h4>
                 ${email_html}
                 <span>bczId: ${currentUser.unique_id}</span>
                 <span>${currentUser.permission.type_name}</span>
@@ -1223,7 +1225,7 @@
       async function sendVerifyCode() {
         // GET /bapi/send_verify_code recv_email:str -> {code:int, message:str}
         document.querySelector("#verify-code-error").textContent = "发送中...";
-        const email = document.querySelector("#qq_id").value + "@qq.com";
+        const email = document.querySelector("#username").value + "@qq.com";
         fetch("/bapi/send_verify_code", {
           method: "POST",
           headers: {
@@ -1267,7 +1269,7 @@
       }
       function submitUserInfo() {
         // POST /bapi/verify {email:str, code:int, user_type:int, nickname:str, password:str, confirm_password:str} -> {code:int, message:str}
-        const email = document.querySelector("#qq_id").value + "@qq.com";
+        const email = document.querySelector("#username").value + "@qq.com";
         const code = parseInt(document.querySelector("#verify_code").value);
         const user_type = parseInt(document.querySelector("#type").value);
         const unique_id = parseInt(document.querySelector("#unique-id").value);
@@ -1333,7 +1335,7 @@
           },
           preConfirm: () => {
             return new Promise((resolve, reject) => {
-              const qq_id = document.querySelector("#qq_id").value;
+              const qq_id = document.querySelector("#username").value;
               const password = document.querySelector("#password").value;
               const confirm_password =
                 document.querySelector("#confirm_password").value;
@@ -1423,7 +1425,7 @@
           },
           preConfirm: () => {
             return new Promise((resolve, reject) => {
-              const qq_id = document.querySelector("#qq_id").value;
+              const qq_id = document.querySelector("#username").value;
               const password = document.querySelector("#password").value;
               const rememberMe = document.querySelector("#remember-me").checked;
               fetch("/bapi/login", {
@@ -1446,6 +1448,7 @@
                       icon: "success",
                     });
                     getUserInfo();
+                    search();
                   } else {
                     setTimeout(() => {
                       Swal.showValidationMessage("失败：" + data.msg);
@@ -1532,9 +1535,11 @@
             data = data.data;
             data.result.forEach((log) => {
               let mail = "";
-              if (log[6]) mail = log[6] + "@qq.com<br>";
-              if (log[11] === -1) mail += "<span class='wheat'>系统操作</span>";
-              else mail += `<span class='wheat'>${log[11]}@qq.com</span>`;
+              if (!currentUser.permission.login_required) { // 未登录时不显示qq号
+                if (log[6]) mail = log[6] + "@qq.com<br>";
+                if (log[11] === -1) mail += "<span class='wheat'>系统操作</span>";
+                else mail += `<span class='wheat'>${log[11]}@qq.com</span>`;
+              }
               let date = "";
               if (log[3]) date = new Date(log[3] * 1000).toLocaleString();
               let table_name = "";
@@ -1566,7 +1571,7 @@
         const results = [resultHeader];
         list.forEach((log) => {
           let mail = "";
-          if (log[6]) mail = log[6] + "@qq.com";
+          if (!currentUser.permission.login_required && log[6]) mail = log[6] + "@qq.com";
           results.push([
             log[0],
             new Date(log[1] * 1000).toLocaleString(),

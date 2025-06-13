@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import uvicorn
-from src.blacklist_utils import blacklist_server_class, User, guest_user, USER_TYPE_ADMIN, USER_TYPE_GUEST
+from src.blacklist_utils import blacklist_server_class, User, guest_user, USER_TYPE_ADMIN, USER_TYPE_GUEST, USER_TYPE_KING
 from fastapi import FastAPI, Request, Response
 from fastapi import Depends, HTTPException, status
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -28,8 +28,6 @@ from pydantic import BaseModel, SecretStr
 import secrets
 from queue import Queue
 
-
-LOGGING_LEVEL = logging.DEBUG
 SESSION_EXPIRE_TIME = 300 # 会话过期时间，单位秒
 REMEMBER_ME_TIME = 3600*24*14 # 记住我选项的有效期，单位秒
 DEFAULT_LIMITS = ["3/second", "30/minute", "300/hour"] # 默认访问速率限制
@@ -56,10 +54,6 @@ DEFAULT_AUTH_CODE = "[necessary]your_authorization_code"
 
 
 EMAIL_REGEX = re.compile(r"[^@]+@[^@]+\.[^@]+")
-
-IS_HTTPS = False  # 强烈建议仅本地调试时设置IS_HTTPS=False
-DEBUG_DO_NOT_SEND_EMAIL = True # 调试模式下不发送邮件
-DEBUG_AVATAR_QQ_URL = False # 调试模式下不使用QQ头像
 
 class ModelRedis:
     '''由于目前并发要求不高，为降低资源占用，暂时手动实现部分redis功能'''
@@ -178,6 +172,14 @@ class Config():
                 self.config = json.load(f)
         self.update_config(self.config)
 
+    def interpretBool(self, input):
+        if type(input) == str:
+            return input.lower() in ['true', 'True', '1', 'yes']
+        elif type(input) == int:
+            return input == 1
+        else:
+            return bool(input)
+
     def update_config(self, config: dict):
         original_copy = self.config.copy()
         original_copy.update(config)
@@ -191,6 +193,12 @@ class Config():
         self.smtp_auth_code = config.get('smtp_auth_code', DEFAULT_AUTH_CODE) # SMTP服务器密码
         self.host = config.get('host', '127.0.0.1') # 服务器监听地址
         self.port = config.get('port', 8870) # 服务器监听端口
+
+        # 以下是调试设置，已经默认配置为生产环境设置
+        self.LOGGING_LEVEL = config.get('LOGGING_LEVEL', 'INFO') # 日志等级
+        self.IS_HTTPS = self.interpretBool(config.get('IS_HTTPS', True))  # 强烈建议仅本地调试时设置IS_HTTPS=False
+        self.DEBUG_DO_NOT_SEND_EMAIL = self.interpretBool(config.get('DEBUG_DO_NOT_SEND_EMAIL', False)) # 调试模式下不发送邮件
+        self.DEBUG_AVATAR_QQ_URL = self.interpretBool(config.get('DEBUG_AVATAR_QQ_URL', True)) # 调试模式下不使用QQ头像
         new_config = {
             'blacklist_xlsx_path': self.blacklist_xlsx_path,
             'blacklist_db_path': self.blacklist_db_path,
@@ -200,7 +208,11 @@ class Config():
            'smtp_email': self.smtp_email,
            'smtp_auth_code': self.smtp_auth_code,
             'host': self.host,
-            'port': self.port
+            'port': self.port,
+            'LOGGING_LEVEL': self.LOGGING_LEVEL,
+            'IS_HTTPS': self.IS_HTTPS,
+            'DEBUG_DO_NOT_SEND_EMAIL': self.DEBUG_DO_NOT_SEND_EMAIL,
+            'DEBUG_AVATAR_QQ_URL': self.DEBUG_AVATAR_QQ_URL,
         }
         if str(new_config) != str(self.config):
             self.config = new_config
@@ -231,7 +243,7 @@ class LoginForm(BaseModel):
 
 logging.basicConfig(
     format='%(asctime)s [%(name)s][%(levelname)s] %(message)s',
-    level=LOGGING_LEVEL
+    level=logging.DEBUG if config.LOGGING_LEVEL == 'DEBUG' else logging.INFO
 )
 
 @asynccontextmanager
@@ -294,7 +306,7 @@ def refresh_session(user: User, response: Response, remember_me: bool = False) -
         return response
     if user.session_expired: # 重新生成JWT令牌
         session_id = encodeJWT(blacklist_server.get_user(user.qq_id))
-        response.set_cookie(key='session_id', value=session_id, httponly=True, secure=IS_HTTPS, samesite='strict', max_age=None) # 浏览器关闭后自动删除
+        response.set_cookie(key='session_id', value=session_id, httponly=True, secure=config.IS_HTTPS, samesite='strict', max_age=None) # 浏览器关闭后自动删除
         
     def create_remember_token(qq_id, REMEMBER_ME_TIME):
         '''生成记住密码的token'''
@@ -306,8 +318,8 @@ def refresh_session(user: User, response: Response, remember_me: bool = False) -
     
     if remember_me: # 只有在remember_me为True也就是登录时勾选了自动登录才会创建remember_token
         remember_token, token_hash = create_remember_token(user.qq_id, REMEMBER_ME_TIME)
-        response.set_cookie(key='remember_token', value=remember_token, httponly=True, secure=IS_HTTPS, samesite='strict', max_age=REMEMBER_ME_TIME) # 设置httponly=False，可以用JavaScript读取
-        response.set_cookie(key='hashed_token', value=token_hash, httponly=True, secure=IS_HTTPS, samesite='strict', max_age=REMEMBER_ME_TIME)
+        response.set_cookie(key='remember_token', value=remember_token, httponly=True, secure=config.IS_HTTPS, samesite='strict', max_age=REMEMBER_ME_TIME) # 设置httponly=False，可以用JavaScript读取
+        response.set_cookie(key='hashed_token', value=token_hash, httponly=True, secure=config.IS_HTTPS, samesite='strict', max_age=REMEMBER_ME_TIME)
     return response
 
 def get_current_user(request: Request) -> User:
@@ -340,7 +352,7 @@ def get_current_user(request: Request) -> User:
 
 # === API端点 ===
 @app.post("/bapi/login")
-@limiter.limit("3/minute")
+@limiter.limit("5/minute")
 async def login(request: Request, form: LoginForm):
     '''登录接口'''
     try:
@@ -382,7 +394,6 @@ async def logout(request: Request):
         return restful(guest_user, 500, f"登出失败: {str(e)}")
 
 @app.post('/bapi/send_verify_code')
-@limiter.limit("3/minute")
 async def bapi_send_verify_code(request: Request, item: dict, user: User = Depends(get_current_user)):
     """发送验证码邮件接口"""
     # 验证邮箱格式
@@ -418,12 +429,12 @@ async def bapi_send_verify_code(request: Request, item: dict, user: User = Depen
     
     try:
         message = f"您正在<u>黑名单系统</u>注册账号或修改资料，您的验证码是: <b>{verification_code}</b>。验证码{EXPIRE_TIME//60}分钟有效，输错超过{MAX_VERIFY_FAIL_COUNT}次将失效，请勿泄露给他人。"
-        if DEBUG_DO_NOT_SEND_EMAIL:
-            logger.info(f"[DEBUG_DO_NOT_SEND_EMAIL] 验证码：{verification_code} ({recv_email} <- {message})")
-            return restful(guest_user, 200, "验证码已发送至邮箱，请注意查收", USER_RESEND_TIME)
+        if config.DEBUG_DO_NOT_SEND_EMAIL:
+            logger.info(f"[config.DEBUG_DO_NOT_SEND_EMAIL] 验证码：{verification_code} ({recv_email} <- {message})")
+            return restful(guest_user, 200, "验证码已发送至控制台，请注意查收", USER_RESEND_TIME)
         
         if config.smtp_email == DEFAULT_MAIL or config.smtp_auth_code == DEFAULT_AUTH_CODE:
-            raise Exception("请先配置SMTP服务器验证码邮箱信息")
+            return restful(guest_user, 500, "请先前往/config页面配置SMTP服务器验证码邮箱信息")
         # 创建邮件对象
         msg = EmailMessage()
         msg["Subject"] = "黑名单系统 验证码"
@@ -432,14 +443,16 @@ async def bapi_send_verify_code(request: Request, item: dict, user: User = Depen
         
         # 使用HTML格式邮件内容
         msg.set_content(message, subtype="html")
-        with smtplib.SMTP(config.smtp_server, config.smtp_port) as server:
-            server.starttls()  # 启用TLS加密
-            server.login(config.smtp_email, config.smtp_auth_code)
-            server.send_message(msg)
-        
-        
+        try:
+            with smtplib.SMTP(config.smtp_server, config.smtp_port) as server:
+                server.starttls()  # 启用TLS加密
+                server.login(config.smtp_email, config.smtp_auth_code)
+                server.send_message(msg)
+        except smtplib.SMTPResponseException as e:
+            logger.error(f"SMTP服务器响应异常：{e}") # 由于部分邮箱如QQ邮箱不能很好的对接smtplib，即使发送成功也会有异常
         return restful(guest_user, 200, "验证码已发送至邮箱，请注意查收", USER_RESEND_TIME)
     except Exception as e:
+        traceback.print_exc()
         return restful(guest_user, 500, f"验证码发送失败: {str(e)}")
     
 @app.get('/bapi/check_email_type')
@@ -518,11 +531,11 @@ async def bapi_verify(request: Request, item: dict, user: User = Depends(get_cur
         if user_type and user_type != old_user_type and not is_admin:
             return restful(user, 403, '不能修改用户类型')
     else:
-        if user_type != USER_TYPE_ADMIN:
+        if is_admin:
             return restful(user, 403, '第一个用户必须是管理员')
     input_code = None
     try:
-        if user.type != USER_TYPE_ADMIN:
+        if not is_admin:
             input_code = int(item.get('code', ''))
     except:
         return restful(user, 400, '验证码必须为数字')
@@ -699,7 +712,7 @@ async def bapi_delete(request: Request, item: dict, user: User = Depends(get_cur
 @app.get('/bapi/my_info')
 async def bapi_my_info(request: Request, user: User = Depends(get_current_user)):
     '''获取当前用户信息'''
-    avatar = f"https://q1.qlogo.cn/g?b=qq&nk={user.qq_id}&s=640" if DEBUG_AVATAR_QQ_URL else f'/static/img/{user.type}.jpg'
+    avatar = f"https://q1.qlogo.cn/g?b=qq&nk={user.qq_id}&s=640" if config.DEBUG_AVATAR_QQ_URL and user.qq_id and user.qq_id > 0 else f'/static/img/{user.type}.jpg'
     return {
         "avatar": avatar,
         "qq_id": user.qq_id,
@@ -763,7 +776,7 @@ async def bapi_update_config(request: Request, item: dict, user: User = Depends(
         return restful(user, 200, '更新配置信息成功')
     except Exception as e:
         return restful(user, 400, f'更新配置信息失败：{e}')
-    
+
 @app.post('/bapi/latest_log')
 async def bapi_latest_log(request: Request, item: dict, user: User = Depends(get_current_user)):
     '''获取最新日志'''
@@ -778,7 +791,54 @@ async def bapi_latest_log(request: Request, item: dict, user: User = Depends(get
     except Exception as e:
         return restful(user, 400, f'获取日志失败：{e}')
 
-@app.get('/bapi/download')
+
+# 下列是手动调用方法
+
+@app.get('/submit')
+async def submit_page(request: Request):
+    '''提交页面'''
+    return templates.TemplateResponse('submit.html', {'request': request})
+
+@app.post('/oapi/bulk')
+async def bapi_bulk_add_user(request: Request, item: dict, user: User = Depends(get_current_user)):
+    '''批量添加用户'''
+    if user.type != USER_TYPE_ADMIN:
+        return restful(user, 403, '权限不足')
+    try:
+        user_list = item.get('qq', '').replace('\n','').split(',') # qq,nickname,qq,nickname...
+        for i in range(0, len(user_list), 2):
+            if not user_list[i] or not user_list[i+1]:
+                continue
+            qq_id = int(user_list[i])
+            nickname = user_list[i+1]
+            blacklist_server.update_user(qq_id, 1, nickname, None, USER_TYPE_KING)
+        return restful(user, 200, '批量添加用户成功')
+    except Exception as e:
+        return restful(user, 400, f'批量添加用户失败：{e}')
+    
+@app.get('/oapi/count')
+async def bapi_count(request: Request, user: User = Depends(get_current_user)):
+    '''获取记录过黑名单的用户，按记录的多少排序'''
+    if user.type != USER_TYPE_ADMIN:
+        return restful(user, 403, '权限不足')
+    try:
+        count_list = blacklist_server.get_count_list()
+        return restful(user, 200, '获取记录数量成功', count_list)
+    except Exception as e:
+        return restful(user, 400, f'获取记录数量失败：{e}')
+
+@app.get('/oapi/repair')
+async def bapi_repair_blacklist(request: Request, user: User = Depends(get_current_user)):
+    '''修复黑名单'''
+    if user.type != USER_TYPE_ADMIN:
+        return restful(user, 403, '权限不足')
+    try:
+        blacklist_server.repair_blacklist()
+        return restful(user, 200, '修复黑名单成功')
+    except Exception as e:
+        return restful(user, 400, f'修复黑名单失败：{e}')
+
+@app.get('/oapi/download')
 async def blacklist(request: Request, user: User = Depends(get_current_user)):
     '''下载黑名单数据库（用于备份）'''
     if user.type != USER_TYPE_ADMIN:
@@ -793,7 +853,7 @@ async def blacklist(request: Request, user: User = Depends(get_current_user)):
     except Exception as e:
         return restful(user, 400, f'{e}')
     
-@app.post('/bapi/upload')
+@app.post('/oapi/upload')
 async def bapi_upload(request: Request, user: User = Depends(get_current_user)):
     '''上传黑名单数据库（用于恢复）'''
     if user.type != USER_TYPE_ADMIN:

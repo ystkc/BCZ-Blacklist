@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文件上传</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .upload-form {
+            background-color: #f9f9f9;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="file"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        .success {
+            background-color: #dff0d8;
+            color: #3c763d;
+            display: block;
+        }
+        .error {
+            background-color: #f2dede;
+            color: #a94442;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <h1>文件上传</h1>
+    <h3>blacklist.db</h3>
+    <div class="upload-form">
+        <form id="uploadForm" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="file">选择文件:</label>
+                <!-- 只允许上传db文件 -->
+                <input type="file" id="file" name="file" accept=".db" required>
+            </div>
+            <button type="submit">上传文件</button>
+        </form>
+        <div id="status" class="status"></div>
+    </div>
+
+    <script>
+        document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const fileInput = document.getElementById('file');
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = '上传中...';
+            statusDiv.className = 'status';
+            
+            if (fileInput.files.length === 0) {
+                statusDiv.textContent = '请先选择一个文件';
+                statusDiv.className = 'status error';
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            
+            try {
+                const response = await fetch('/oapi/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    statusDiv.textContent = `文件上传成功: ${result.msg || '无返回消息'}`;
+                    statusDiv.className = 'status success';
+                } else {
+                    const error = await response.json();
+                    statusDiv.textContent = `上传失败: ${error.msg || '未知错误'}`;
+                    statusDiv.className = 'status error';
+                }
+            } catch (err) {
+                statusDiv.textContent = `网络错误: ${err.message}`;
+                statusDiv.className = 'status error';
+            }
+        });
+    </script>
+</body>
+</html>

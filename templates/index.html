@@ -838,7 +838,10 @@
             const date = document.getElementById("swal-date").value;
             const time = document.getElementById("swal-time").value;
             if (!date || !time) {
-              Swal.showValidationMessage("请填写日期和时间！");
+              setTimeout(() => {
+                Swal.showValidationMessage("请填写日期和时间！");
+                Swal.enableButtons();
+              }, 127);
             }
             // 返回ms时间戳
             return new Date(date + "T" + time).getTime();
@@ -1278,7 +1281,10 @@
         const confirm_password =
           document.querySelector("#confirm_password").value;
         if (password !== confirm_password) {
-          Swal.showValidationMessage("失败：两次密码输入不一致");
+          setTimeout(() => {
+            Swal.showValidationMessage("失败：两次密码输入不一致");
+            Swal.enableButtons();
+          }, 127);
           return;
         }
         return fetch("/bapi/verify", {

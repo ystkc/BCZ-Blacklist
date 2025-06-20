@@ -1,13 +1,13 @@
+'''黑名单服务器模块，负责管理黑名单数据库，提供数据库操作接口，只有较少的异常检测，主要由外部app负责异常检测'''
 import datetime
-import secrets
-import re
 import os
+import secrets
 import sqlite3
 import time
-import bcrypt
-import openpyxl
 import logging
 import zipfile
+import bcrypt
+import openpyxl
 from pydantic import BaseModel
 
 MAX_LOG_CNT = 1000 # 日志最大条数
@@ -26,6 +26,7 @@ USER_TYPE_STR_MAP = {
 }
 
 class User(BaseModel):
+    '''储存用户信息'''
     qq_id: int
     unique_id: int
     type: int
@@ -33,8 +34,11 @@ class User(BaseModel):
     password: str
     session_expired: bool = False
 
-guest_user = User(qq_id=0, unique_id=0, type=USER_TYPE_GUEST, nickname='请登录', password="")
-system_user = User(qq_id=-1, unique_id=0, type=USER_TYPE_GUEST, nickname='系统管理员', password="") # 此帐号不应注册或登录，仅用于标记系统的操作
+guest_user = User(qq_id=0, unique_id=0, type=USER_TYPE_GUEST,
+                   nickname='请登录', password="")
+system_user = User(qq_id=-1, unique_id=0, type=USER_TYPE_GUEST,
+                    nickname='系统管理员', password="")
+# system_user帐号不应注册或登录，仅用于标记系统的操作
 
 TABLE_TYPE_TOWN = 1
 TABLE_TYPE_KING = 2
@@ -63,41 +67,42 @@ OPERATION_TYPE_STR_MAP = {
 NO_ENCODE = False # 是否不进行编码（仅用于测试）
 
 def encoder(text: str):
+    '''将字符串加密（字节部分异或加密，仅用于避开某些例如违禁词检测器）'''
     if NO_ENCODE:
         return bytearray(text.encode())
     # 转化成bytearray类型
-    input = bytearray(text.encode())
-    
-    for i in range(len(input)):
+    input_byte = bytearray(text.encode())
+    for i, _ in enumerate(input_byte):
         # 将byte的后5位取反
-        input[i] = input[i] ^ 0b00011111
+        input_byte[i] = input_byte[i] ^ 0b00011111
         # ...
-    return input
+    return input_byte
 
 def decoder(text: bytearray):
+    '''将加密后的bytearray类型解密'''
     if NO_ENCODE:
         return bytearray(text).decode()
-    input = bytearray(text)
+    input_byte = bytearray(text)
     # 转化成bytearray类型
-    for i in range(len(input)):
+    for i, _ in enumerate(input_byte):
         # 将byte的后5位取反
-        input[i] = input[i] ^ 0b00011111
-    
-    return input.decode()
+        input_byte[i] = input_byte[i] ^ 0b00011111
+    return input_byte
 
 
-class blacklist_server_class:
-    
+class BlacklistServerClass:
+    '''黑名单服务器类，负责管理黑名单数据库，提供数据库操作接口'''
     def get_permission(self, user_type):
         '''获取用户权限组名称和可以编辑的表名称'''
         result = {
             'type': user_type,
             'type_name': USER_TYPE_STR_MAP[user_type],
-            'modify_other_users': True if user_type == USER_TYPE_ADMIN else False, # 管理员可以修改其他用户信息和改变其他用户类型
-            'login_required': True if user_type == USER_TYPE_GUEST else False, # 访客需要登录
+            'modify_other_users': user_type == USER_TYPE_ADMIN, # 管理员可以修改其他用户信息和改变其他用户类型
+            'login_required': user_type == USER_TYPE_GUEST, # 访客需要登录
             'has_admin': self.has_admin, # 是否有管理员，如果没有，则要求立即注册一个管理员
             'admin_alert': '没有检测到管理员账号，请立即注册一个管理员账号' if not self.has_admin else '',
-            'admin_notice': '<u><b>您正在注册管理员账号。请注意：管理员可以设置或取消其他管理员的权限，无论注册顺序先后</b></u>' if not self.has_admin else '',
+            'admin_notice': '<u><b>您正在注册管理员账号。请注意：管理员可设置、取消其他管理员，无论注册顺序先后</b></u>'
+                if not self.has_admin else '',
             'tables': {}
         }
         for table_type, table_name in TABLE_TYPE_STR_MAP.items():
@@ -106,6 +111,7 @@ class blacklist_server_class:
         return result
 
     def configure_database(self, conn: sqlite3.Connection):
+        '''配置数据库，设置缓存大小、临时存储、外键约束、日志模式、锁定模式等'''
         cursor = conn.cursor()
         cursor.execute("PRAGMA cache_size = -65536;") # 64MB
         cursor.execute("PRAGMA temp_store = MEMORY;")
@@ -113,26 +119,27 @@ class blacklist_server_class:
         cursor.execute("PRAGMA journal_mode = MEMORY;")
         cursor.execute("PRAGMA locking_mode = EXCLUSIVE;")
         cursor.close()
-        
-    def detach(dict: dict) -> str: 
+
+    def detach(self, dict_: dict) -> str:
         '''将dict转换为key\nvalue形式的字符串'''
         result = ""
-        for key, value in dict.items():
+        for key, value in dict_.items():
             result += f"{key}\n{value}\n"
         return result
-    
-    def unfold(list: list) -> str:
-        '''将list转换\n形式的字符串'''
-        return '\n'.join(list)
 
-    def flatten(str: str) -> str:
-        return str.replace(' ','').replace('[]','').replace('.0','')
-    
+    def unfold(self, list_: list) -> str:
+        '''将list转换\n形式的字符串'''
+        return '\n'.join(list_)
+
+    def flatten(self, str_: str) -> str:
+        '''将字符串中的空格、[]、.0删去，使传输更加简洁'''
+        return str_.replace(' ','').replace('[]','').replace('.0','')
+
     def reason_name_to_id(self, reason_name: str | list[str], add_unknown: bool = False) -> str:
         '''根据原因名称获取原因ID，返回id,id,id或空字符串'''
         if not reason_name:
             return ""
-        reasons = reason_name.split(',') if type(reason_name) == str else reason_name
+        reasons = reason_name.split(',') if isinstance(reason_name, str) else reason_name
         result = []
         for reason in reasons:
             if reason in self.reason_dict:
@@ -145,32 +152,32 @@ class blacklist_server_class:
                     self.reason_buffer.append((self.reason_max_id, reason))
                     result.append(str(self.reason_max_id))
                 else:
-                    raise Exception(f"未知原因：{reason}")
+                    raise IndexError(f"未知原因：{reason}")
         result = ','.join(result)
         return result
-    
+
     def reason_id_to_name(self, reason_id: list[int] | str) -> str:
         '''根据原因ID获取原因名称'''
         if not reason_id or len(reason_id) == 0:
             return ''
-        if type(reason_id) == str:
+        if isinstance(reason_id, str):
             reason_id = reason_id.split(',')
         reasons = []
-        for id in reason_id:
-            if id == '':
+        for rid in reason_id:
+            if rid == '':
                 continue
-            id = int(id)
-            if id in self.reason_id_lookup:
-                reasons.append(self.reason_id_lookup[id])
+            rid = int(rid)
+            if rid in self.reason_id_lookup:
+                reasons.append(self.reason_id_lookup[rid])
             else:
-                raise Exception(f"未知原因ID：{id}")
+                raise IndexError(f"未知原因ID：{rid}")
         result = ','.join(reasons)
         return result
-    
+
     def table_id_to_name(self, table_id):
         '''根据表ID获取表名称'''
         return TABLE_TYPE_STR_MAP.get(table_id, None)
-    
+
     def read_reason(self, conn: sqlite3.Connection):
         '''从原因表格中读取原因的ID和名称'''
         self.logger.info("正在读取 原因配置")
@@ -183,7 +190,7 @@ class blacklist_server_class:
             self.reason_id_lookup[row[0]] = row[1]
         cursor.close()
         self.logger.info("原因配置读取完成")
-    
+
     def read_user_info(self, conn: sqlite3.Connection):
         '''从数据库中读取用户信息'''
         self.logger.info("正在读取 用户信息")
@@ -196,7 +203,11 @@ class blacklist_server_class:
         for row in user_list:
             if row[2] == USER_TYPE_ADMIN:
                 self.has_admin = True
-            self.user_dict[row[0]] = User(qq_id=row[0], unique_id=row[1], type=row[2], nickname=row[3], password=row[4])
+            self.user_dict[row[0]] = User(qq_id=row[0],
+                unique_id=row[1],
+                type=row[2],
+                nickname=row[3],
+                password=row[4])
             self.user_name_to_id[row[3]] = row[0]
         cursor.close()
         self.logger.info("用户信息读取完成")
@@ -209,11 +220,11 @@ class blacklist_server_class:
         '''检查qq_id是否已经存在于用户表（未注册为游客，预注册密码为空，都可以用密码进行判断）'''
         result = self.user_dict.get(qq_id, guest_user)
         return result.password != ""
-    
+
     def get_user(self, qq_id):
-        '''获取该用户'''
+        '''根据qq_id获取该用户'''
         return self.user_dict.get(qq_id, None)
-    
+
     def repair_blacklist(self):
         '''自动修复黑名单中的无主数据，应该在管理员确认没有昵称被冒用后调用'''
         for uid, create_time_dict in self.blacklist.items():
@@ -222,38 +233,80 @@ class blacklist_server_class:
                 if recorder_qq_id is None:
                     recorder_qq_id = self.user_name_to_id.get(tp[5], None)
                     if recorder_qq_id: # 修复成功
-                        self.update_blacklist(uid, create_time, tp[2], tp[3], tp[4], tp[5], recorder_qq_id, tp[7], tp[8], tp[9], system_user)
+                        self.update_blacklist((uid,
+                            create_time,
+                            tp[2],
+                            tp[3],
+                            tp[4],
+                            tp[5],
+                            recorder_qq_id,
+                            tp[7],
+                            tp[8],
+                            tp[9]),
+                            system_user)
         self.export_black_list_to_db()
 
-    def interpretT(self, timestamp):
+    def interpret_timestamp(self, timestamp):
         '''将时间戳转换为字符串'''
-        return datetime.datetime.strftime(datetime.datetime.fromtimestamp(timestamp), '%Y/%m/%d %H:%M:%S')
-    
+        return datetime.datetime.strftime(
+            datetime.datetime.fromtimestamp(timestamp),
+            '%Y/%m/%d %H:%M:%S')
+
     def chkdiff(self, old_tp, new_tp):
         '''检查两个tp是否相同(除了last_edit_time)'''
         if old_tp is None:
             return False
-        for i in range(len(old_tp)):
-            if old_tp[i] != new_tp[i] and i != 8:
+        for i, ele in enumerate(old_tp):
+            if ele != new_tp[i] and i != 8:
                 return False
         return True
 
-    def update_blacklist(self, uid, create_time, nickname, date, reason_id_list, recorder, recorder_qq_id, remark, last_edit_time, table_id, user: User, save_db=False):
+    def update_blacklist(self, tp, user: User, save_db=False):
         '''更新黑名单'''
+        uid, \
+        create_time, \
+        nickname, \
+        date, \
+        reason_id_list, \
+        recorder, \
+        recorder_qq_id, \
+        remark, \
+        last_edit_time, \
+        table_id = tp
+
         old_tp = None
         operation = OPERATION_TYPE_MODIFY_TO
         if self.check_exist(uid, create_time):
             old_tp = self.blacklist[uid][create_time]
         else:
             operation = OPERATION_TYPE_ADD
-        tp = (uid, create_time, nickname, date, reason_id_list, recorder, recorder_qq_id, remark, last_edit_time, table_id)
-        id = (uid, create_time)
+        tp = (uid,
+            create_time,
+            nickname,
+            date,
+            reason_id_list,
+            recorder,
+            recorder_qq_id,
+            remark,
+            last_edit_time,
+            table_id)
         if self.chkdiff(old_tp, tp):
-            raise Exception(f"记录没有修改")
+            raise ValueError("记录没有修改")
         if old_tp:
             # 记录修改前的记录
             reason = str(old_tp[4]).replace(' ','')
-            self.blacklist_log.append((uid, create_time, old_tp[2], old_tp[3], reason, old_tp[5], old_tp[6], old_tp[7], old_tp[8], old_tp[9], OPERATION_TYPE_MODIFY_FROM, user.qq_id))
+            self.blacklist_log.append((uid,
+                create_time,
+                old_tp[2],
+                old_tp[3],
+                reason,
+                old_tp[5],
+                old_tp[6],
+                old_tp[7],
+                old_tp[8],
+                old_tp[9],
+                OPERATION_TYPE_MODIFY_FROM,
+                user.qq_id))
             if self.blacklist_log_cnt > MAX_LOG_CNT:
                 self.blacklist_log.pop(0)
             else:
@@ -261,33 +314,53 @@ class blacklist_server_class:
         if uid not in self.blacklist:
             self.blacklist[uid] = {}
             self.blacklist_str[uid] = {}
-        
         self.blacklist[uid][create_time] = tp
         self.blacklist_str[uid][create_time] = "".join([
             str(uid),
-            self.interpretT(create_time),
+            self.interpret_timestamp(create_time),
             nickname if nickname else '',
-            self.interpretT(date), 
-            self.reason_id_to_name(reason_id_list.split(',')), 
-            recorder if recorder else '', 
+            self.interpret_timestamp(date),
+            self.reason_id_to_name(reason_id_list.split(',') if reason_id_list else ''),
+            recorder if recorder else '',
             str(recorder_qq_id) if recorder_qq_id else '',
-            remark if remark else '', 
-            self.interpretT(last_edit_time), 
-            TABLE_TYPE_STR_MAP[table_id]])
+            remark if remark else '',
+            self.interpret_timestamp(last_edit_time),
+            TABLE_TYPE_STR_MAP.get(table_id, '')])
         if recorder_qq_id:
             if recorder_qq_id not in self.blacklist_recorder:
                 self.blacklist_recorder[recorder_qq_id] = {}
-            self.blacklist_recorder[recorder_qq_id][id] = tp
+            self.blacklist_recorder[recorder_qq_id][(uid, create_time)] = tp
         if recorder:
             if recorder not in self.blacklist_cnt:
                 self.blacklist_cnt[recorder] = 0
             if not old_tp:
                 self.blacklist_cnt[recorder] += 1
         if save_db:
-            self.update_db(uid, create_time, nickname, date, reason_id_list, recorder, recorder_qq_id, remark, last_edit_time, table_id, operation, user)
+            self.update_db((uid,
+                create_time,
+                nickname,
+                date,
+                str(reason_id_list).replace(' ',''),
+                recorder,
+                recorder_qq_id,
+                remark,
+                last_edit_time,
+                table_id,
+                operation,
+                user.qq_id))
         else:
-            reason = str(reason_id_list).replace(' ','')
-            self.blacklist_log.append((uid, create_time, nickname, date, reason, recorder, recorder_qq_id, remark, last_edit_time, table_id, operation, user.qq_id))
+            self.blacklist_log.append((uid,
+                create_time,
+                nickname,
+                date,
+                str(reason_id_list).replace(' ',''),
+                recorder,
+                recorder_qq_id,
+                remark,
+                last_edit_time,
+                table_id,
+                operation,
+                user.qq_id))
             if self.blacklist_log_cnt > MAX_LOG_CNT:
                 self.blacklist_log.pop(0)
             else:
@@ -300,34 +373,63 @@ class blacklist_server_class:
             tp = self.blacklist[uid][create_time]
             return tp[6] # recorder_qq_id也可能是None
         return -1
-    
+
     def delete_blacklist(self, uid, create_time, user: User):
         '''删除黑名单'''
         if self.check_exist(uid, create_time):
-            uid, create_time, nickname, date, reason_id_list, recorder, recorder_qq_id, remark, last_edit_time, table_id = self.blacklist[uid][create_time]
-            id = (uid, create_time)
+            uid, \
+            create_time, \
+            nickname, \
+            date, \
+            reason_id_list, \
+            recorder, \
+            recorder_qq_id, \
+            remark, \
+            last_edit_time, \
+            table_id = self.blacklist[uid][create_time]
+
             if recorder_qq_id in self.blacklist_recorder:
-                del self.blacklist_recorder[recorder_qq_id][id] # 删除记录时用的是原记录者的qq_id
+                del self.blacklist_recorder[recorder_qq_id][(uid, create_time)] # 删除记录时用的是原记录者的qq_id
                 self.blacklist_cnt[recorder] -= 1
             del self.blacklist[uid][create_time]
             del self.blacklist_str[uid][create_time]
-            self.delete_from_db(uid, create_time, nickname, date, reason_id_list, recorder, recorder_qq_id, remark, last_edit_time, table_id, OPERATION_TYPE_DELETE, user)
+            self.delete_from_db((uid,
+                create_time,
+                nickname,
+                date,
+                str(reason_id_list).replace(' ',''),
+                recorder,
+                recorder_qq_id,
+                remark,
+                last_edit_time,
+                table_id,
+                OPERATION_TYPE_DELETE,
+                user))
             # 清除缓存
             self.result = []
             self.result_keyword = ""
         else:
-            raise Exception(f"不存在的黑名单记录：{uid} {create_time}")
+            raise IndexError(f"不存在的黑名单记录：{uid} {create_time}")
 
     def read_blacklist_db(self, conn: sqlite3.Connection):
         '''从数据库中读取黑名单（合并到内存）'''
         self.logger.info("正在读取 黑名单数据库")
         cursor = conn.cursor()
-        cursor.execute("SELECT uid, create_time, nickname, date, reason, recorder, recorder_qq_id, remark, last_edit_time, table_id FROM blacklist")
+        cursor.execute("""SELECT uid,
+            create_time,
+            nickname,
+            date,
+            reason,
+            recorder,
+            recorder_qq_id,
+            remark,
+            last_edit_time,
+            table_id FROM blacklist""")
         blacklist_list = cursor.fetchall()
         for row in blacklist_list:
-            self.update_blacklist(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], system_user)
+            self.update_blacklist(row, system_user)
         cursor.close()
-    
+
     def read_blacklist_xlsx(self, blacklist_xlsx_path):
         '''从xlsx文件中读取黑名单（合并到内存）'''
         if not os.path.exists(blacklist_xlsx_path):
@@ -338,43 +440,61 @@ class blacklist_server_class:
         for row in ws.iter_rows(min_row=2):
             uid = row[1].value
             if uid is None:
-                continue # 跳过空行 
+                continue # 跳过空行
             try:
                 uid = int(uid)
-            except:
+            except TypeError: # None
+                continue
+            except ValueError:
                 print(f"{uid} 不是数字，对应昵称为 {row[0].value}，跳过")
                 continue
             if row[2].value is None:
                 print(f"{uid} 未填写退班时间，跳过")
                 continue
-            nickname = (row[0].value)
+            nickname = row[0].value
             create_time = date = int(row[2].value.timestamp())
-            recorder = (row[4].value)
+            recorder = row[4].value
             recorder_qq_id = self.user_name_to_id.get(row[4].value, None)
-            
+
             if self.check_exist(uid, date):
                 continue
 
             reason = ""
             if row[3].value is not None:
                 reason = self.reason_name_to_id(row[3].value, add_unknown=True)
-            
-            remark = (row[5].value)
+
+            remark = row[5].value
 
             if row[6].value is None:
                 continue
             last_edit_time = row[6].value.timestamp()
-            try:
-                last_editor = (row[7].value)
-            except:
-                last_editor = ('无')
-            try:
-                first_editor = (row[8].value)
-            except:
-                first_editor = ('无')
-            self.update_blacklist(uid, create_time, nickname, date, reason, recorder, recorder_qq_id, remark, last_edit_time, TABLE_TYPE_KING, system_user)
+            # try:
+            #     last_editor = (row[7].value)
+            # except:
+            #     last_editor = ('无')
+            # try:
+            #     first_editor = (row[8].value)
+            # except:
+            #     first_editor = ('无')
+            self.update_blacklist((uid,
+                create_time,
+                nickname,
+                date,
+                reason,
+                recorder,
+                recorder_qq_id,
+                remark,
+                last_edit_time,
+                TABLE_TYPE_KING),
+                system_user)
+
+    def refresh_jwt_secret(self):
+        '''刷新jwt_secret，用于外部有人修改密码时手动调用'''
+        self.jwt_secret = secrets.token_urlsafe(32)
 
     def __init__(self, blacklist_db_path):
+        self.jwt_secret = secrets.token_urlsafe(32) # 每次重启或有人修改密码时都会改变
+
         self.logger = logging.getLogger(__name__)
         self.has_admin = False # 如果没有管理员，则要求立即注册一个
         self.blacklist = {}
@@ -393,6 +513,8 @@ class blacklist_server_class:
         self.reason_id_lookup = {} # 原因ID和名称的映射
         self.reason_buffer = [] # 批量添加原因时的原因缓冲区
         self.reason_max_id = 0 # 最大原因ID，用于自动生成ID为新的原因
+        self.user_dict = {} # 用户ID和User类的映射
+        self.user_name_to_id = {} # 用户昵称和ID的映射
         self.blacklist_db_path = blacklist_db_path
         # 初始化数据库
         self.logger.info("正在初始化 黑名单数据库")
@@ -427,7 +549,7 @@ class blacklist_server_class:
         conn.close()
         self.__ready = False
         self.logger.info("黑名单数据库初始化完成")
-    
+
     def login(self, qq_id, password):
         '''登录接口'''
         target_user = self.user_dict.get(qq_id, None)
@@ -437,28 +559,61 @@ class blacklist_server_class:
             return False
         return True
 
-    
+    def reload_db(self, blacklist_db_path, blacklist_xlsx_path):
+        '''清空所有内存数据，并重新从数据库和xlsx文件加载'''
+        self.logger.info("正在清空内存数据")
+        # 删除黑名单数据
+        self.blacklist = {}
+        self.blacklist_str = {}
+        self.blacklist_recorder = {}
+        self.blacklist_cnt = {}
+        self.blacklist_buffer = []
+        self.blacklist_db_path = blacklist_db_path
+        # 删除用户数据
+        self.user_dict = {}
+        self.user_name_to_id = {}
+        # 删除原因数据
+        self.reason_dict = {}
+        self.reason_id_lookup = {}
+        self.reason_buffer = []
+        self.reason_max_id = 0
+        # 重新加载数据库
+        self.__ready = False
+        self.prepare(blacklist_xlsx_path)
+        self.logger.info("数据库重载完成")
+
     def prepare(self, blacklist_xlsx_path):
+        '''全局准备函数（原因、用户数据、数据库和导入xlsx文件）'''
         if not self.__ready:
             self.logger.info("正在读取 黑名单数据")
-            conn = sqlite3.connect(self.blacklist_db_path, detect_types=0, uri=True)
+            conn = sqlite3.connect(self.blacklist_db_path, detect_types=0)
             self.read_reason(conn)
             self.read_user_info(conn) # 先读取用户信息以便修复旧数据
             self.read_blacklist_db(conn)
             self.read_blacklist_xlsx(blacklist_xlsx_path)
             self.__ready = True
-            self.logger.info("黑名单数据读取完成")
-    
+            self.logger.info("黑名单数据读取完成，共加载 %d 条记录", len(self.blacklist))
+
     def export_black_list_to_db(self):
         '''导出黑名单到数据库(大规模修改时使用，方法：先使用update_blacklist的save_db选项为False，然后完毕后调用此函数)'''
         self.logger.info("正在保存黑名单到数据库")
         conn = sqlite3.connect(self.blacklist_db_path, detect_types=0, uri=True)
         self.configure_database(conn)
         cursor = conn.cursor()
-        cursor.executemany("INSERT OR REPLACE INTO blacklist (uid, create_time, nickname, date, reason, recorder, recorder_qq_id, remark, last_edit_time, table_id) VALUES (?,?,?,?,?,?,?,?,?,?)", self.blacklist_buffer)
+        cursor.executemany("""INSERT OR REPLACE INTO blacklist (uid,
+            create_time,
+            nickname,
+            date,
+            reason,
+            recorder,
+            recorder_qq_id,
+            remark,
+            last_edit_time,
+            table_id) VALUES (?,?,?,?,?,?,?,?,?,?)""", self.blacklist_buffer)
         self.blacklist_buffer = []
         # 导出reason 表
-        cursor.executemany("INSERT OR REPLACE INTO reason (reason_id, reason_name) VALUES (?,?)", self.reason_buffer)
+        cursor.executemany("""INSERT OR REPLACE INTO reason
+                            (reason_id, reason_name) VALUES (?,?)""", self.reason_buffer)
         self.reason_buffer = []
         conn.commit()
         cursor.close()
@@ -469,11 +624,12 @@ class blacklist_server_class:
         '''导出黑名单到静态json文件'''
         self.logger.info("正在写入 黑名单 json 文件")
         with open(black_list_assets, 'wb') as f:
-            f.write(encoder(blacklist_server_class.flatten(blacklist_server_class.detach(self.blacklist))))
-        with zipfile.ZipFile(f"{black_list_assets}.zip", 'w', zipfile.ZIP_DEFLATED) as f:
+            f.write(encoder(self.flatten(self.detach(self.blacklist))))
+        with zipfile.ZipFile(f"{black_list_assets}.zip",
+                'w', zipfile.ZIP_DEFLATED) as f:
             f.write(black_list_assets, arcname=black_list_assets)
         self.logger.info("黑名单导出完成")
-    
+
     def update_user(self, qq_id, unique_id, nickname, password, new_type):
         '''更新用户信息'''
         # 检查密码
@@ -494,28 +650,56 @@ class blacklist_server_class:
         if not unique_id:
             unique_id = old_unique_id
         if not old_password_hash and password: # 正式注册
-            self.blacklist_log.append((unique_id, int(time.time()), nickname, None, None, "", None, USER_TYPE_STR_MAP[new_type], int(time.time()), None, OPERATION_TYPE_REGISTER, qq_id))
+            self.blacklist_log.append((unique_id,
+                int(time.time()),
+                nickname,
+                None,
+                None,
+                "",
+                None,
+                USER_TYPE_STR_MAP[new_type],
+                int(time.time()),
+                None,
+                OPERATION_TYPE_REGISTER,
+                qq_id))
             if self.blacklist_log_cnt > MAX_LOG_CNT:
                 self.blacklist_log.pop(0)
             else:
                 self.blacklist_log_cnt += 1
-        
+
         password_hash = ""
         if password:
             password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
         else:
             password_hash = old_password_hash.encode('utf-8')
         # 更新用户信息
-        self.logger.info(f"更新用户 {qq_id} {unique_id} {nickname} {password} {new_type}")
+        self.logger.info("更新用户 %d %d %s %s %d",
+            unique_id,
+            new_type,
+            nickname,
+            password,
+            qq_id)
         conn = sqlite3.connect(self.blacklist_db_path, detect_types=0, uri=True)
         cursor = conn.cursor()
-        cursor.execute("INSERT OR REPLACE INTO user_info (unique_id, type, nickname, password, qq_id) VALUES (?,?,?,?,?)", (unique_id, new_type, nickname, password_hash, qq_id))
+        cursor.execute("""INSERT OR REPLACE INTO user_info (unique_id,
+            type,
+            nickname,
+            password,
+            qq_id) VALUES (?,?,?,?,?)""", (unique_id,
+                new_type,
+                nickname,
+                password_hash,
+                qq_id))
         conn.commit()
         cursor.close()
         conn.close()
         if new_type == USER_TYPE_ADMIN:
             self.has_admin = True
-        self.user_dict[qq_id] = User(qq_id=qq_id, unique_id=unique_id, type=new_type, nickname=nickname, password=password_hash)
+        self.user_dict[qq_id] = User(qq_id=qq_id,
+            unique_id=unique_id,
+            type=new_type,
+            nickname=nickname,
+            password=password_hash)
         if old_nickname:
             del self.user_name_to_id[old_nickname]
         self.user_name_to_id[nickname] = qq_id
@@ -525,7 +709,9 @@ class blacklist_server_class:
         if keyword == self.result_keyword:
             page_max = (self.result_len-1)//limit+1
             page = max(1, min(page, page_max))
-            return {'result': self.result[page*limit-limit:page*limit], 'page_max': page_max, 'page': page}
+            return {'result': self.result[page*limit-limit:page*limit],
+                    'page_max': page_max,
+                    'page': page}
         self.result = []
         self.result_keyword = keyword
         for uid, str_list in self.blacklist_str.items():
@@ -535,13 +721,21 @@ class blacklist_server_class:
         self.result_len = len(self.result)
         return self.search(keyword, page, limit) # 使用桐一个结果构造器
 
-    def update_db(self, uid, create_time, nickname, date, reason_id_list:list, recorder, recorder_qq_id, remark, last_edit_time, table_id, operation, user: User):
+    def update_db(self, tp):
         '''添加黑名单（外部已经检查过，此处直接添加）'''
         conn = sqlite3.connect(self.blacklist_db_path, detect_types=0, uri=True)
         cursor = conn.cursor()
-        reason = str(reason_id_list).replace(' ','')
-        cursor.execute("INSERT OR REPLACE INTO blacklist (uid, create_time, nickname, date, reason, recorder, recorder_qq_id, remark, last_edit_time, table_id) VALUES (?,?,?,?,?,?,?,?,?,?)", (uid, create_time, nickname, date, reason, recorder, recorder_qq_id, remark, last_edit_time, table_id))
-        self.blacklist_log.append((uid, create_time, nickname, date, reason, recorder, recorder_qq_id, remark, last_edit_time, table_id, operation, user.qq_id))
+        cursor.execute("""INSERT OR REPLACE INTO blacklist (uid,
+            create_time,
+            nickname,
+            date,
+            reason,
+            recorder,
+            recorder_qq_id,
+            remark,
+            last_edit_time,
+            table_id) VALUES (?,?,?,?,?,?,?,?,?,?) -- ? ?""", tp)
+        self.blacklist_log.append(tp)
         if self.blacklist_log_cnt > MAX_LOG_CNT:
             self.blacklist_log.pop(0)
         else:
@@ -553,13 +747,12 @@ class blacklist_server_class:
         self.result = []
         self.result_keyword = ""
 
-    def delete_from_db(self, uid, create_time, nickname, date, reason_id_list:list, recorder, recorder_qq_id, remark, last_edit_time, table_id, operation, user: User):
+    def delete_from_db(self, tp):
         '''删除黑名单（外部已经检查过，此处直接删除）'''
         conn = sqlite3.connect(self.blacklist_db_path, detect_types=0, uri=True)
         cursor = conn.cursor()
-        reason = str(reason_id_list).replace(' ','')
-        cursor.execute("DELETE FROM blacklist WHERE uid=? AND create_time=?", (uid, create_time))
-        self.blacklist_log.append((uid, create_time, nickname, date, reason, recorder, recorder_qq_id, remark, last_edit_time, table_id, operation, user.qq_id))
+        cursor.execute("DELETE FROM blacklist WHERE uid=? AND create_time=?", (tp[0], tp[1]))
+        self.blacklist_log.append(tp)
         if self.blacklist_log_cnt > MAX_LOG_CNT:
             self.blacklist_log.pop(0)
         else:
@@ -583,8 +776,10 @@ class blacklist_server_class:
         tot = list(self.blacklist_recorder.get(qq_id, {}).values())
         page_max = (len(tot)-1)//limit+1
         page = max(1, min(page, page_max))
-        return {'result': tot[page*limit-limit:page*limit], 'page_max': page_max, 'page': page}
-    
+        return {'result': tot[page*limit-limit:page*limit],
+                'page_max': page_max,
+                'page': page}
+
     def get_dicts(self):
         '''获取所有原因、表、操作类型的键值对'''
         return {
@@ -592,7 +787,7 @@ class blacklist_server_class:
             'tables': TABLE_TYPE_STR_MAP,
             'operations': OPERATION_TYPE_STR_MAP
         }
-    
+
     def get_register_type(self, qq_id):
         '''根据用户提供的邮箱判断即将注册的类型'''
         if not self.has_admin:
@@ -609,14 +804,17 @@ class blacklist_server_class:
             max_tot = max_index
         page_max = (min(max_index, max_tot)-1)//limit+1
         page = max(1, min(page, page_max))
-        index_start = max(0, max(max_index - max_tot, max_index - limit*(page)))
+        index_start = max(0, max_index - max_tot, max_index - limit*(page))
         index_end = max_index - limit*(page-1)
         result = self.blacklist_log[index_start:index_end]
         result.reverse()
         return {'result': result, 'page_max': page_max, 'page': page}
 
-if __name__ == '__main__':
+def default_fun():
     '''运行本函数可以将xlsx迁移到空白的数据库'''
-    obj = blacklist_server_class('./blacklist.db')
+    obj = BlacklistServerClass('./blacklist.db')
     obj.prepare('./blacklist.xlsx')
     obj.export_black_list_to_db()
+
+if __name__ == '__main__':
+    default_fun()

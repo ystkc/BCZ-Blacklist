@@ -36,7 +36,8 @@ class Config():
         self.blacklist_xlsx_path = cur.get('blacklist_xlsx_path',
                                             './blacklist.xlsx') # excel导入（只读）无效时跳过
         self.blacklist_db_path = cur.get('blacklist_db_path', './blacklist.db') # 黑名单数据库路径（读&写）
-        self.blacklist_assets = cur.get('blacklist_assets', './assets/black_list.bin') # 静态导出路径
+        self.blacklist_assets = cur.get('blacklist_assets',
+                                        '../BCZ-Notice-Examiner/assets/blacklist.bin') # 静态导出路径
         self.smtp_server = cur.get('smtp_server', 'smtp.qq.com') # SMTP服务器地址
         self.smtp_port = cur.get('smtp_port', 587) # SMTP服务器端口
         self.smtp_email = cur.get('smtp_email', DEFAULT_MAIL) # SMTP服务器用户名

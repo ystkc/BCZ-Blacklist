@@ -619,7 +619,6 @@
           )
             .then((response) => response.json())
             .then((data) => {
-              console.log(data);
               let warning = "";
               if (data.data.has_password)
                 warning = "<span style='color:red'>该邮箱已注册</span>";
@@ -648,7 +647,6 @@
           })
             .then((response) => response.json())
             .then((data) => {
-              console.log(data);
               if (data.code == 200) {
                 target.value = data.data.permission.type;
                 target_name.textContent = `当前用户：${data.data.permission.type}(${data.data.permission.type_name})`;
@@ -807,10 +805,12 @@
         if (value !== undefined) {
           if (value[0] === 999) {
             // 自定义日期
+            let selected_value = await customDatePicker(
+              parseInt(element.dataset.timestamp)
+            );
+            if (!selected_value.isConfirmed) return;
             element.dataset.selectedIds = 999; // 自定义日期
-            value = (
-              await customDatePicker(parseInt(element.dataset.timestamp))
-            ).value; // 此处返回的是ms时间戳
+            value = selected_value.value; // 此处返回的是ms时间戳
           } else {
             element.dataset.selectedIds = value[0]; // 选择了value[0]天前
             value = new Date().getTime() - value[0] * 86400000; // 计算ms时间戳
@@ -824,7 +824,7 @@
       async function customDatePicker(initialTimestamp) {
         const initialDate = new Date(initialTimestamp);
         return await Swal.fire({
-          title: "请选择",
+          title: "自定义退班时间",
           html: `<input type="date" id="swal-date" class="swal2-input" placeholder="日期" value=${initialDate
             .toISOString()
             .slice(0, 10)}>
@@ -838,14 +838,11 @@
             const date = document.getElementById("swal-date").value;
             const time = document.getElementById("swal-time").value;
             if (!date || !time) {
-              setTimeout(() => {
-                Swal.showValidationMessage("请填写日期和时间！");
-                Swal.enableButtons();
-              }, 127);
+              return initialTimestamp;
             }
             // 返回ms时间戳
             return new Date(date + "T" + time).getTime();
-          },
+          }
         });
       }
       async function showSelector(
@@ -1028,7 +1025,6 @@
         })
           .then((response) => response.json())
           .then((data) => {
-            console.log(data);
             if (data.code == 200) {
               Swal.fire({
                 title: "添加成功",
@@ -1099,7 +1095,6 @@
         }
         let reason_html = "",
           reason_cnt = 0;
-        console.log(reason_ids_str);
         reason_ids_str.forEach((rs) => {
           r = parseInt(rs);
           reason_cnt += 1;
@@ -1598,7 +1593,6 @@
         for (let i = 0; i < list.length; i++) {
           const row = table_target.rows[i + 1];
           const log = list[i];
-          console.log(log, currentUser);
           const operation_html = getUserOperation(
             log[6] === currentUser.qq_id,
             currentUser.permission.modify_other_users,
@@ -1690,7 +1684,6 @@
         })
           .then((response) => response.json())
           .then((data) => {
-            console.log(data);
             if (data.code == 200) {
               Swal.fire({
                 title: "添加成功",
@@ -1734,7 +1727,6 @@
         })
           .then((response) => response.json())
           .then((data) => {
-            console.log(data);
             if (data.code == 200) {
               Swal.fire({
                 title: "删除成功",
@@ -1748,6 +1740,7 @@
                 icon: "error",
               });
             }
+            search();
           })
           .catch((error) => {
             console.error(error);

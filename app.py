@@ -193,7 +193,7 @@ async def favicon():
     return FileResponse('static/favicon.ico')
 
 blacklist_server = BlacklistServerClass(config.blacklist_db_path)
-blacklist_server.prepare(config.blacklist_xlsx_path)
+blacklist_server.prepare()
 templates = Jinja2Templates(directory="templates")
 
 @app.exception_handler(RateLimitExceeded)
@@ -636,6 +636,8 @@ async def bapi_update(request: Request, user: User = Depends(get_current_user)):
     try:
         recorder_qq_id = int(item.get('recorder_qq_id', ''))
         assert blacklist_server.check_exist_user(recorder_qq_id)
+    except (ValueError, TypeError):
+        return restful(user, 400, '记录者QQ号必须为数字')
     except AssertionError:
         return restful(user, 400, '无效或未注册的记录者QQ号')
     if recorder_qq_id != user.qq_id and not user.type == USER_TYPE_ADMIN:
@@ -644,18 +646,6 @@ async def bapi_update(request: Request, user: User = Depends(get_current_user)):
     if len(remark) > MAX_REMARK_LEN:
         return restful(user, 400, f'备注过长，请控制在{MAX_REMARK_LEN}字以内')
     try:
-        logger.info("修改黑名单成功: uid=%s, create_time=%s, nickname=%s, date=%s, reason_id_list=%s, \
-                    recorder=%s, recorder_qq_id=%s, remark=%s, last_edit_time=%s, table_id=%s",
-            uid,
-            create_time,
-            nickname,
-            date,
-            reason_id_list,
-            recorder,
-            recorder_qq_id,
-            remark,
-            last_edit_time,
-            table_id)
         blacklist_server.update_blacklist((uid,
             create_time,
             nickname,
@@ -668,6 +658,18 @@ async def bapi_update(request: Request, user: User = Depends(get_current_user)):
             table_id),
             user,
             save_db=True)
+        logger.info("修改黑名单成功: uid=%s, create_time=%s, nickname=%s, date=%s, reason_id_list=%s, \
+                    recorder=%s, recorder_qq_id=%s, remark=%s, last_edit_time=%s, table_id=%s",
+            uid,
+            create_time,
+            nickname,
+            date,
+            reason_id_list,
+            recorder,
+            recorder_qq_id,
+            remark,
+            last_edit_time,
+            table_id)
         return restful(user, 200, '提交成功')
     except Exception as e:
         return restful(user, 400, f'失败：{e}')
@@ -854,8 +856,8 @@ async def blacklist(user: User = Depends(get_current_user)):
     try:
         # 将数据库文件返回给客户端
         response = FileResponse(config.blacklist_db_path, media_type='application/octet-stream')
-        response.headers['Content-Disposition'] = 'attachment; filename="blacklist %s.db"' %\
-            datetime.datetime.now().strftime('%Y-%m-%d %H-%M-%S')
+        date_str = datetime.datetime.now().strftime('%Y-%m-%d %H-%M-%S')
+        response.headers['Content-Disposition'] = f'attachment; filename="blacklist {date_str}.db"'
         return response
     except Exception as e:
         return restful(user, 400, f'{e}')
@@ -868,7 +870,7 @@ async def upload(request: Request):
 def reload():
     '''重载数据库执行函数'''
     redis_client.flushall()
-    blacklist_server.reload_db(config.blacklist_db_path, config.blacklist_xlsx_path)
+    blacklist_server.reload_db(config.blacklist_db_path)
 
 @app.post('/oapi/upload')
 async def bapi_upload(request: Request, user: User = Depends(get_current_user)):
@@ -895,6 +897,22 @@ async def bapi_reload(user: User = Depends(get_current_user)):
     try:
         reload()
         return restful(user, 200, '重新加载成功')
+    except Exception as e:
+        return restful(user, 400, f'{e}')
+
+@app.get('/oapi/export')
+@limiter.limit("1/day")
+async def bapi_export(request: Request, user: User = Depends(get_current_user)):
+    '''将xlsx中的数据合并入内存,并导出黑名单静态查询资源'''
+    # 每次要登录太麻烦,限制每天1次就好了,如果要本地模式多次就重启程序就好
+    # if user.type != USER_TYPE_ADMIN:
+    #     return restful(user, 403, '权限不足')
+    try:
+        logger.info("export request from %s", request.client.host)
+        blacklist_server.read_blacklist_xlsx(config.blacklist_xlsx_path)
+
+        blacklist_server.export_black_list_to_bin(config.blacklist_assets)
+        return restful(user, 200, '导出成功')
     except Exception as e:
         return restful(user, 400, f'{e}')
 

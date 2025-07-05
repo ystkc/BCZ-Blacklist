@@ -1,6 +1,8 @@
 '''黑名单服务器模块，负责管理黑名单数据库，提供数据库操作接口，只有较少的异常检测，主要由外部app负责异常检测'''
 import datetime
+import json
 import os
+import re
 import secrets
 import sqlite3
 import time
@@ -64,31 +66,7 @@ OPERATION_TYPE_STR_MAP = {
     OPERATION_TYPE_REGISTER: '注册'
 }
 
-NO_ENCODE = False # 是否不进行编码（仅用于测试）
-
-def encoder(text: str):
-    '''将字符串加密（字节部分异或加密，仅用于避开某些例如违禁词检测器）'''
-    if NO_ENCODE:
-        return bytearray(text.encode())
-    # 转化成bytearray类型
-    input_byte = bytearray(text.encode())
-    for i, _ in enumerate(input_byte):
-        # 将byte的后5位取反
-        input_byte[i] = input_byte[i] ^ 0b00011111
-        # ...
-    return input_byte
-
-def decoder(text: bytearray):
-    '''将加密后的bytearray类型解密'''
-    if NO_ENCODE:
-        return bytearray(text).decode()
-    input_byte = bytearray(text)
-    # 转化成bytearray类型
-    for i, _ in enumerate(input_byte):
-        # 将byte的后5位取反
-        input_byte[i] = input_byte[i] ^ 0b00011111
-    return input_byte
-
+NO_ENCODE = False # 是否不进行编码（在静态站点资源导出函数中）
 
 class BlacklistServerClass:
     '''黑名单服务器类，负责管理黑名单数据库，提供数据库操作接口'''
@@ -119,21 +97,6 @@ class BlacklistServerClass:
         cursor.execute("PRAGMA journal_mode = MEMORY;")
         cursor.execute("PRAGMA locking_mode = EXCLUSIVE;")
         cursor.close()
-
-    def detach(self, dict_: dict) -> str:
-        '''将dict转换为key\nvalue形式的字符串'''
-        result = ""
-        for key, value in dict_.items():
-            result += f"{key}\n{value}\n"
-        return result
-
-    def unfold(self, list_: list) -> str:
-        '''将list转换\n形式的字符串'''
-        return '\n'.join(list_)
-
-    def flatten(self, str_: str) -> str:
-        '''将字符串中的空格、[]、.0删去，使传输更加简洁'''
-        return str_.replace(' ','').replace('[]','').replace('.0','')
 
     def reason_name_to_id(self, reason_name: str | list[str], add_unknown: bool = False) -> str:
         '''根据原因名称获取原因ID，返回id,id,id或空字符串'''
@@ -260,6 +223,14 @@ class BlacklistServerClass:
             if ele != new_tp[i] and i != 8:
                 return False
         return True
+    
+    def add_log(self, tp):
+        '''添加日志到self.blacklist_log'''
+        self.blacklist_log.append(tp)
+        if self.blacklist_log_cnt > MAX_LOG_CNT:
+            self.blacklist_log.pop(0)
+        else:
+            self.blacklist_log_cnt += 1
 
     def update_blacklist(self, tp, user: User, save_db=False):
         '''更新黑名单'''
@@ -295,7 +266,7 @@ class BlacklistServerClass:
         if old_tp:
             # 记录修改前的记录
             reason = str(old_tp[4]).replace(' ','')
-            self.blacklist_log.append((uid,
+            self.add_log((uid,
                 create_time,
                 old_tp[2],
                 old_tp[3],
@@ -307,10 +278,6 @@ class BlacklistServerClass:
                 old_tp[9],
                 OPERATION_TYPE_MODIFY_FROM,
                 user.qq_id))
-            if self.blacklist_log_cnt > MAX_LOG_CNT:
-                self.blacklist_log.pop(0)
-            else:
-                self.blacklist_log_cnt += 1
         if uid not in self.blacklist:
             self.blacklist[uid] = {}
             self.blacklist_str[uid] = {}
@@ -349,7 +316,7 @@ class BlacklistServerClass:
                 operation,
                 user.qq_id))
         else:
-            self.blacklist_log.append((uid,
+            self.add_log((uid,
                 create_time,
                 nickname,
                 date,
@@ -361,10 +328,6 @@ class BlacklistServerClass:
                 table_id,
                 operation,
                 user.qq_id))
-            if self.blacklist_log_cnt > MAX_LOG_CNT:
-                self.blacklist_log.pop(0)
-            else:
-                self.blacklist_log_cnt += 1
             self.blacklist_buffer.append(tp)
 
     def get_target_auth_info(self, uid, create_time):
@@ -404,7 +367,7 @@ class BlacklistServerClass:
                 last_edit_time,
                 table_id,
                 OPERATION_TYPE_DELETE,
-                user))
+                user.qq_id))
             # 清除缓存
             self.result = []
             self.result_keyword = ""
@@ -455,6 +418,11 @@ class BlacklistServerClass:
             create_time = date = int(row[2].value.timestamp())
             recorder = row[4].value
             recorder_qq_id = self.user_name_to_id.get(row[4].value, None)
+            if recorder_qq_id is None:
+                # 尝试从现有数据库中获取
+                tp = self.blacklist.get(uid, {}).get(create_time, None)
+                if tp:
+                    recorder_qq_id = tp[6]
 
             if self.check_exist(uid, date):
                 continue
@@ -559,7 +527,7 @@ class BlacklistServerClass:
             return False
         return True
 
-    def reload_db(self, blacklist_db_path, blacklist_xlsx_path):
+    def reload_db(self, blacklist_db_path):
         '''清空所有内存数据，并重新从数据库和xlsx文件加载'''
         self.logger.info("正在清空内存数据")
         # 删除黑名单数据
@@ -579,10 +547,10 @@ class BlacklistServerClass:
         self.reason_max_id = 0
         # 重新加载数据库
         self.__ready = False
-        self.prepare(blacklist_xlsx_path)
+        self.prepare()
         self.logger.info("数据库重载完成")
 
-    def prepare(self, blacklist_xlsx_path):
+    def prepare(self):
         '''全局准备函数（原因、用户数据、数据库和导入xlsx文件）'''
         if not self.__ready:
             self.logger.info("正在读取 黑名单数据")
@@ -590,7 +558,6 @@ class BlacklistServerClass:
             self.read_reason(conn)
             self.read_user_info(conn) # 先读取用户信息以便修复旧数据
             self.read_blacklist_db(conn)
-            self.read_blacklist_xlsx(blacklist_xlsx_path)
             self.__ready = True
             self.logger.info("黑名单数据读取完成，共加载 %d 条记录", len(self.blacklist))
 
@@ -621,14 +588,51 @@ class BlacklistServerClass:
         self.logger.info("黑名单已经保存到数据库")
 
     def export_black_list_to_bin(self, black_list_assets):
-        '''导出黑名单到静态json文件'''
+        '''导出黑名单到静态文件（用于静态查询站点）'''
+        def encoder(text: str) -> bytearray:
+            '''将字符串加密（字节部分异或加密，仅用于避开某些例如违禁词检测器）'''
+            input_byte = bytearray(text.encode()) # 转化成bytearray类型
+            if NO_ENCODE:
+                return input_byte
+            for i, _ in enumerate(input_byte):
+                input_byte[i] = input_byte[i] ^ 0b00011111 # 将byte的后5位取反
+            return input_byte
+
+        def decoder(input_byte: bytearray) -> str:
+            '''将加密后的bytearray类型解密'''
+            if NO_ENCODE:
+                return input_byte.decode()
+            for i, _ in enumerate(input_byte):
+                input_byte[i] = input_byte[i] ^ 0b00011111
+            return input_byte.decode()
+
+        def detach(dict_: dict) -> str:
+            '''将dict的第二重的key剥掉，转换成list'''
+            return {k: [sub_v for sub_v in v.values()] for k, v in dict_.items()}
+
+        def unfold(list_: list) -> str:
+            '''将list转换\n形式的字符串'''
+            return '\n'.join(list_)
+
+        def flatten(str_: str) -> str:
+            '''将字符串中的空格、[]、.0删去，使传输更加简洁'''
+            replace_dict = {' ': '', 'null': '', '\n': ''}
+            return re.sub(r'|'.join(map(re.escape, replace_dict.keys())),
+                        lambda match: replace_dict[match.group(0)], str_)
+            # 负号是用来标记嵌套hash_string的，但是只有原因字段是，因此可以去掉
+
         self.logger.info("正在写入 黑名单 json 文件")
+        exported_blacklist = detach(self.blacklist)
+        exported_blacklist[0] = datetime.datetime.now().strftime('%Y-%m-%d.%H:%M:%S')
+        exported_blacklist[-1] = self.reason_id_lookup
+        exported_blacklist[-2] = TABLE_TYPE_STR_MAP
         with open(black_list_assets, 'wb') as f:
-            f.write(encoder(self.flatten(self.detach(self.blacklist))))
-        with zipfile.ZipFile(f"{black_list_assets}.zip",
-                'w', zipfile.ZIP_DEFLATED) as f:
+            f.write(encoder(flatten(json.dumps(exported_blacklist, ensure_ascii=False, indent=0))))
+        with zipfile.ZipFile(f"{black_list_assets}.zip", 'w', zipfile.ZIP_DEFLATED) as f:
             f.write(black_list_assets, arcname=black_list_assets)
         self.logger.info("黑名单导出完成")
+
+
 
     def update_user(self, qq_id, unique_id, nickname, password, new_type):
         '''更新用户信息'''
@@ -650,7 +654,7 @@ class BlacklistServerClass:
         if not unique_id:
             unique_id = old_unique_id
         if not old_password_hash and password: # 正式注册
-            self.blacklist_log.append((unique_id,
+            self.add_log((unique_id,
                 int(time.time()),
                 nickname,
                 None,
@@ -662,10 +666,6 @@ class BlacklistServerClass:
                 None,
                 OPERATION_TYPE_REGISTER,
                 qq_id))
-            if self.blacklist_log_cnt > MAX_LOG_CNT:
-                self.blacklist_log.pop(0)
-            else:
-                self.blacklist_log_cnt += 1
 
         password_hash = ""
         if password:
@@ -734,12 +734,8 @@ class BlacklistServerClass:
             recorder_qq_id,
             remark,
             last_edit_time,
-            table_id) VALUES (?,?,?,?,?,?,?,?,?,?) -- ? ?""", tp)
-        self.blacklist_log.append(tp)
-        if self.blacklist_log_cnt > MAX_LOG_CNT:
-            self.blacklist_log.pop(0)
-        else:
-            self.blacklist_log_cnt += 1
+            table_id) VALUES (?,?,?,?,?,?,?,?,?,?)""", tp[:10])
+        self.add_log(tp)
         conn.commit()
         cursor.close()
         conn.close()
@@ -751,12 +747,8 @@ class BlacklistServerClass:
         '''删除黑名单（外部已经检查过，此处直接删除）'''
         conn = sqlite3.connect(self.blacklist_db_path, detect_types=0, uri=True)
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM blacklist WHERE uid=? AND create_time=?", (tp[0], tp[1]))
-        self.blacklist_log.append(tp)
-        if self.blacklist_log_cnt > MAX_LOG_CNT:
-            self.blacklist_log.pop(0)
-        else:
-            self.blacklist_log_cnt += 1
+        cursor.execute("DELETE FROM blacklist WHERE uid=? AND create_time=?", tp[:2])
+        self.add_log(tp)
         conn.commit()
         cursor.close()
         conn.close()
@@ -813,8 +805,10 @@ class BlacklistServerClass:
 def default_fun():
     '''运行本函数可以将xlsx迁移到空白的数据库'''
     obj = BlacklistServerClass('./blacklist.db')
-    obj.prepare('./blacklist.xlsx')
+    obj.prepare()
+    obj.read_blacklist_xlsx('./blacklist.xlsx')
     obj.export_black_list_to_db()
+    obj.export_black_list_to_bin('../BCZ-Notice-Examiner/assets/blacklist.bin')
 
 if __name__ == '__main__':
     default_fun()
